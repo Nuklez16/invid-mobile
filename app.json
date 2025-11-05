@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "invid-mobile-temp",
-    "slug": "invid-mobile-temp",
+    "name": "invid-mobile",
+    "slug": "invid-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -12,6 +12,8 @@
       "supportsTablet": true
     },
     "android": {
+      "googleServicesFile": "./app/google-services.json",
+      
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -19,7 +21,13 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "notification": {
+        "icon": "./assets/images/android-icon-foreground.png",
+        "color": "#ffffff",
+        "priority": "max"
+      },
+      "package": "com.nukleuz.invidmobile"
     },
     "web": {
       "output": "static",
@@ -38,11 +46,26 @@
             "backgroundColor": "#000000"
           }
         }
-      ]
+      ],
+      "expo-notifications"
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "49d5b7d8-723b-4cac-839f-1e21bc1a44f8"
+      }
+    },
+    "owner": "nukleuz",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+   "updates": {
+  "url": "https://u.expo.dev/49d5b7d8-723b-4cac-839f-1e21bc1a44f8",
+  "enabled": true,
+  "fallbackToCacheTimeout": 0
+}
   }
 }
