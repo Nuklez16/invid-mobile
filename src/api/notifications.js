@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text } from 'react-native';
 import Constants from 'expo-constants';
-import { useAuthContext } from '../src/context/AuthContext';
+import { useAuthContext } from '../context/AuthContext';
 
 export default function NotificationsScreen() {
   const { isLoading, user, accessToken } = useAuthContext();

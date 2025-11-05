@@ -41,26 +41,43 @@ export default function HomeScreen() {
     },
   ];
 
-  // Use real data from API, fallback to basic user info
-  const profileData = userProfile || {
-    username: user?.username || 'Unknown',
+  const isProfileLoaded = Boolean(userProfile);
+
+  const fallbackProfile = {
+    username: user?.username || 'Loading…',
     role: 'Member',
-    lastSeen: 'Just now',
-    registered: 'Unknown',
+    lastSeen: 'Loading…',
+    registered: 'Loading…',
     age: null,
-    gender: 'Not specified',
-    location: 'Unknown',
-    reputation: 0,
+    gender: 'Loading…',
+    location: 'Loading…',
+    reputation: null,
     teams: [],
     friends: [],
     matchStats: {
-      totalPugMatches: 0,
-      totalTournamentMatches: 0
+      totalPugMatches: null,
+      totalTournamentMatches: null
     }
   };
 
+  // Use real data from API, fallback to basic user info
+  const profileData = isProfileLoaded ? userProfile : fallbackProfile;
+
+  const displayValue = (value, fallbackWhenLoaded = 'N/A') => {
+    if (!isProfileLoaded) return 'Loading…';
+    if (value === null || value === undefined || value === '') {
+      return fallbackWhenLoaded;
+    }
+    return value;
+  };
+
+  const displayNumber = (value) =>
+    isProfileLoaded && typeof value === 'number' ? value : '–';
+
   // Format reputation with commas
-  const formattedReputation = profileData.reputation?.toLocaleString() || '0';
+  const formattedReputation = isProfileLoaded
+    ? profileData.reputation?.toLocaleString?.() ?? '0'
+    : '–';
 
   // Function to handle friend click
   const handleFriendPress = (friendUsername) => {
@@ -99,9 +116,11 @@ export default function HomeScreen() {
               <Ionicons name="person" size={40} color="#fff" />
             </View>
             <View style={styles.profileInfo}>
-              <Text style={styles.username}>{profileData.username}</Text>
-              <Text style={styles.role}>{profileData.role}</Text>
-              <Text style={styles.lastSeen}>Last seen: {profileData.lastSeen}</Text>
+              <Text style={styles.username}>{displayValue(profileData.username, user?.username || 'Unknown')}</Text>
+              <Text style={styles.role}>{displayValue(profileData.role, 'Member')}</Text>
+              <Text style={styles.lastSeen}>
+                Last seen: {displayValue(profileData.lastSeen, 'Just now')}
+              </Text>
             </View>
             {profileData.isOnline && (
               <View style={styles.onlineIndicator}>
@@ -115,27 +134,43 @@ export default function HomeScreen() {
           <View style={styles.infoGrid}>
             <View style={styles.infoItem}>
               <Text style={styles.infoLabel}>Registered</Text>
-              <Text style={styles.infoValue}>{profileData.registered}</Text>
+              <Text style={styles.infoValue}>
+                {displayValue(profileData.registered, 'Unknown')}
+              </Text>
             </View>
             <View style={styles.infoItem}>
               <Text style={styles.infoLabel}>Age</Text>
-              <Text style={styles.infoValue}>{profileData.age || 'N/A'}</Text>
+              <Text style={styles.infoValue}>
+                {displayValue(
+                  profileData.age !== null ? profileData.age : undefined,
+                  'N/A'
+                )}
+              </Text>
             </View>
             <View style={styles.infoItem}>
               <Text style={styles.infoLabel}>Gender</Text>
-              <Text style={styles.infoValue}>{profileData.gender}</Text>
+              <Text style={styles.infoValue}>
+                {displayValue(profileData.gender, 'Not specified')}
+              </Text>
             </View>
             <View style={styles.infoItem}>
               <Text style={styles.infoLabel}>Location</Text>
-              <Text style={styles.infoValue}>{profileData.location}</Text>
+              <Text style={styles.infoValue}>
+                {displayValue(profileData.location, 'Unknown')}
+              </Text>
             </View>
           </View>
 
           {/* Reputation */}
           <View style={styles.reputation}>
             <Text style={styles.reputationLabel}>Forum Reputation</Text>
-            <Text style={styles.reputationValue}>{formattedReputation} rep</Text>
+            <Text style={styles.reputationValue}>
+              {isProfileLoaded ? `${formattedReputation} rep` : 'Loading…'}
+            </Text>
           </View>
+          {!isProfileLoaded && (
+            <Text style={styles.loadingHint}>Hang tight, we're fetching your stats…</Text>
+          )}
         </View>
       </TouchableOpacity>
 
@@ -153,10 +188,16 @@ export default function HomeScreen() {
         </View>
       )}
 
-      {/* Friends Section - Now Clickable! */}
-      {profileData.friends && profileData.friends.length > 0 && (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Friends</Text>
+      {/* Friends Section */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Friends</Text>
+        {!isProfileLoaded ? (
+          <View style={styles.placeholderRow}>
+            {[0, 1, 2].map((index) => (
+              <View key={index} style={styles.placeholderChip} />
+            ))}
+          </View>
+        ) : profileData.friends && profileData.friends.length > 0 ? (
           <View style={styles.friendsList}>
             {profileData.friends.map((friend, index) => (
               <TouchableOpacity
@@ -168,19 +209,25 @@ export default function HomeScreen() {
               </TouchableOpacity>
             ))}
           </View>
-        </View>
-      )}
+        ) : (
+          <Text style={styles.emptyText}>No friends yet</Text>
+        )}
+      </View>
 
       {/* Match Stats */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Match Stats</Text>
         <View style={styles.statsGrid}>
           <View style={styles.statItem}>
-            <Text style={styles.statNumber}>{profileData.matchStats?.totalPugMatches || 0}</Text>
+            <Text style={styles.statNumber}>
+              {displayNumber(profileData.matchStats?.totalPugMatches)}
+            </Text>
             <Text style={styles.statLabel}>Total PUG Matches</Text>
           </View>
           <View style={styles.statItem}>
-            <Text style={styles.statNumber}>{profileData.matchStats?.totalTournamentMatches || 0}</Text>
+            <Text style={styles.statNumber}>
+              {displayNumber(profileData.matchStats?.totalTournamentMatches)}
+            </Text>
             <Text style={styles.statLabel}>Tournament Matches</Text>
           </View>
         </View>
@@ -303,6 +350,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
   },
+  loadingHint: {
+    color: '#888',
+    fontSize: 12,
+    marginTop: 8,
+  },
   section: {
     backgroundColor: '#1a1a1a',
     padding: 20,
@@ -341,6 +393,17 @@ const styles = StyleSheet.create({
   friendsList: {
     flexDirection: 'row',
     flexWrap: 'wrap',
+  },
+  placeholderRow: {
+    flexDirection: 'row',
+  },
+  placeholderChip: {
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#2a2a2a',
+    marginRight: 8,
+    marginBottom: 8,
+    minWidth: 64,
   },
   friendItem: {
     marginRight: 8,

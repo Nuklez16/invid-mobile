@@ -6,6 +6,7 @@ import React, {
   useCallback,
   useContext,
 } from "react";
+import { Alert } from "react-native";
 import {
   saveSession,
   loadSession,
@@ -70,6 +71,9 @@ export function AuthProvider({ children }) {
   const [refreshToken, setRefreshToken] = useState("");
   const [pushToken, setPushToken] = useState(null);
 
+  const SESSION_EXPIRED_MESSAGE = "Your session expired. Please sign in again.";
+  const RESTORE_SESSION_MESSAGE = "We couldn't restore your session. Please sign in again.";
+
   // Add this function to load user profile
   const loadUserProfile = useCallback(async () => {
     if (!accessToken) return;
@@ -92,6 +96,34 @@ export function AuthProvider({ children }) {
     }
   }, [accessToken, isLoading, loadUserProfile]);
 
+  // 🚪 Logout
+  const handleLogout = useCallback(
+    async (options) => {
+      const normalized =
+        typeof options === "string" ? { reason: options } : options || {};
+      const { reason, silent } = normalized;
+
+      try {
+        if (refreshToken) {
+          await apiLogout();
+        }
+      } catch (_) {
+        console.warn("Logout API call failed, clearing local session anyway");
+      }
+      await clearSession();
+      setUser(null);
+      setUserProfile(null); // ← Clear profile on logout
+      setAccessToken("");
+      setRefreshToken("");
+      setPushToken(null);
+      if (reason && !silent) {
+        Alert.alert("Signed out", reason);
+      }
+      router.replace("/login");
+    },
+    [refreshToken]
+  );
+
   // 🔁 Refresh token logic
   const handleRefresh = useCallback(async () => {
     try {
@@ -105,28 +137,10 @@ export function AuthProvider({ children }) {
       return newTokens.accessToken;
     } catch (err) {
       console.warn("❌ Refresh failed", err);
-      await handleLogout();
+      await handleLogout({ reason: SESSION_EXPIRED_MESSAGE });
       throw err;
     }
-  }, [refreshToken]);
-
-  // 🚪 Logout
-  const handleLogout = useCallback(async () => {
-    try {
-      if (refreshToken) {
-        await apiLogout();
-      }
-    } catch (_) {
-      console.warn("Logout API call failed, clearing local session anyway");
-    }
-    await clearSession();
-    setUser(null);
-    setUserProfile(null); // ← Clear profile on logout
-    setAccessToken("");
-    setRefreshToken("");
-    setPushToken(null);
-    router.replace("/login");
-  }, [refreshToken]);
+  }, [refreshToken, handleLogout]);
 
   // 🔓 Load session on boot
   useEffect(() => {
@@ -176,7 +190,8 @@ export function AuthProvider({ children }) {
         console.log("🔄 Access token expired, checking refresh token...");
         if (refreshExpired) {
           console.warn("❌ Refresh token expired, logging out");
-          if (isMounted) await handleLogout();
+          if (isMounted)
+            await handleLogout({ reason: SESSION_EXPIRED_MESSAGE });
           return;
         }
 
@@ -201,11 +216,14 @@ export function AuthProvider({ children }) {
           }
         } catch (err) {
           console.warn("❌ Token refresh failed:", err.message);
-          setAccessToken(sess.accessToken);
+          if (isMounted) {
+            await handleLogout({ reason: SESSION_EXPIRED_MESSAGE });
+          }
         }
       } catch (error) {
         console.warn("❌ Error loading session:", error);
-        if (isMounted) await handleLogout();
+        if (isMounted)
+          await handleLogout({ reason: RESTORE_SESSION_MESSAGE });
       } finally {
         if (isMounted) setIsLoading(false);
       }
