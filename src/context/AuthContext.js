@@ -92,24 +92,6 @@ export function AuthProvider({ children }) {
     }
   }, [accessToken, isLoading, loadUserProfile]);
 
-  // 🔁 Refresh token logic
-  const handleRefresh = useCallback(async () => {
-    try {
-      const newTokens = await apiRefresh({ refreshToken });
-      setAccessToken(newTokens.accessToken);
-      setRefreshToken(newTokens.refreshToken);
-      await saveTokens({
-        accessToken: newTokens.accessToken,
-        refreshToken: newTokens.refreshToken,
-      });
-      return newTokens.accessToken;
-    } catch (err) {
-      console.warn("❌ Refresh failed", err);
-      await handleLogout();
-      throw err;
-    }
-  }, [refreshToken]);
-
   // 🚪 Logout
   const handleLogout = useCallback(async () => {
     try {
@@ -127,6 +109,24 @@ export function AuthProvider({ children }) {
     setPushToken(null);
     router.replace("/login");
   }, [refreshToken]);
+
+  // 🔁 Refresh token logic
+  const handleRefresh = useCallback(async () => {
+    try {
+      const newTokens = await apiRefresh({ refreshToken });
+      setAccessToken(newTokens.accessToken);
+      setRefreshToken(newTokens.refreshToken);
+      await saveTokens({
+        accessToken: newTokens.accessToken,
+        refreshToken: newTokens.refreshToken,
+      });
+      return newTokens.accessToken;
+    } catch (err) {
+      console.warn("❌ Refresh failed", err);
+      await handleLogout();
+      throw err;
+    }
+  }, [refreshToken, handleLogout]);
 
   // 🔓 Load session on boot
   useEffect(() => {
