@@ -58,7 +58,7 @@ export default function LoginScreen() {
         setTicket(res.ticket);
         setStep('2fa');
       } else {
-        router.replace('/notifications');
+        router.replace('/home');
       }
     } catch (e) {
       console.error('[login] error', e);
@@ -73,7 +73,7 @@ export default function LoginScreen() {
     setLoading(true);
     try {
       const res = await login({ ticket, code });
-      if (res?.ok) router.replace('/notifications');
+      if (res?.ok) router.replace('/home');
       else setError('2FA failed');
     } catch (e) {
       setError('2FA failed');
