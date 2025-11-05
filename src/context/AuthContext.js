@@ -123,6 +123,22 @@ export function AuthProvider({ children }) {
     },
     [refreshToken]
   );
+  const handleLogout = useCallback(async () => {
+    try {
+      if (refreshToken) {
+        await apiLogout();
+      }
+    } catch (_) {
+      console.warn("Logout API call failed, clearing local session anyway");
+    }
+    await clearSession();
+    setUser(null);
+    setUserProfile(null); // ← Clear profile on logout
+    setAccessToken("");
+    setRefreshToken("");
+    setPushToken(null);
+    router.replace("/login");
+  }, [refreshToken]);
 
   // 🔁 Refresh token logic
   const handleRefresh = useCallback(async () => {
@@ -138,6 +154,7 @@ export function AuthProvider({ children }) {
     } catch (err) {
       console.warn("❌ Refresh failed", err);
       await handleLogout({ reason: SESSION_EXPIRED_MESSAGE });
+      await handleLogout();
       throw err;
     }
   }, [refreshToken, handleLogout]);
@@ -224,6 +241,15 @@ export function AuthProvider({ children }) {
         console.warn("❌ Error loading session:", error);
         if (isMounted)
           await handleLogout({ reason: RESTORE_SESSION_MESSAGE });
+      } finally {
+        if (isMounted) setIsLoading(false);
+      }
+            await handleLogout();
+          }
+        }
+      } catch (error) {
+        console.warn("❌ Error loading session:", error);
+        if (isMounted) await handleLogout();
       } finally {
         if (isMounted) setIsLoading(false);
       }

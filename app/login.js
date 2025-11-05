@@ -72,6 +72,14 @@ export default function LoginScreen() {
         setStep('2fa');
         setCode('');
         setTouched((prev) => ({ ...prev, code: false }));
+  async function handleLogin() {
+    setError('');
+    setLoading(true);
+    try {
+      const res = await login({ username, password });
+      if (res?.status === 'TWOFA_REQUIRED') {
+        setTicket(res.ticket);
+        setStep('2fa');
       } else {
         router.replace('/home');
       }
@@ -91,6 +99,10 @@ export default function LoginScreen() {
       return;
     }
 
+    setLoading(true);
+    try {
+  async function handleVerify2FA() {
+    setError('');
     setLoading(true);
     try {
       const res = await login({ ticket, code });
