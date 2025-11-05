@@ -201,7 +201,9 @@ export function AuthProvider({ children }) {
           }
         } catch (err) {
           console.warn("❌ Token refresh failed:", err.message);
-          setAccessToken(sess.accessToken);
+          if (isMounted) {
+            await handleLogout();
+          }
         }
       } catch (error) {
         console.warn("❌ Error loading session:", error);
