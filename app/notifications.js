@@ -1,5 +1,5 @@
 // app/notifications.js
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { View, Text, FlatList, RefreshControl, TouchableOpacity, TextInput } from 'react-native';
 import { useAuthContext } from '../src/context/AuthContext';
 import NotificationItem from '../src/components/NotificationItem';
@@ -165,14 +165,25 @@ export default function NotificationsScreen() {
   }, [load]);
 
   // Filter notifications based on search query
-  const filteredUnread = unread.filter(note => 
-    note.message?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    note.type?.toLowerCase().includes(searchQuery.toLowerCase())
+  const normalizedQuery = useMemo(() => searchQuery.trim().toLowerCase(), [searchQuery]);
+
+  const filterByQuery = useCallback((note) => {
+    if (!normalizedQuery) return true;
+
+    const fields = [note.message, note.type, note.title];
+    return fields.some((field) =>
+      typeof field === 'string' && field.toLowerCase().includes(normalizedQuery)
+    );
+  }, [normalizedQuery]);
+
+  const filteredUnread = useMemo(
+    () => unread.filter(filterByQuery),
+    [unread, filterByQuery]
   );
 
-  const filteredRead = read.filter(note =>
-    note.message?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    note.type?.toLowerCase().includes(searchQuery.toLowerCase())
+  const filteredRead = useMemo(
+    () => read.filter(filterByQuery),
+    [read, filterByQuery]
   );
 
   // Use useMemo for scenes to prevent re-renders

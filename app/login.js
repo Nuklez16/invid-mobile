@@ -9,6 +9,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Dimensions,
+  ActivityIndicator,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -29,6 +30,12 @@ export default function LoginScreen() {
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [touched, setTouched] = useState({ username: false, password: false, code: false });
+
+  const trimmedUsername = username.trim();
+  const isLoginDisabled =
+    loading || trimmedUsername.length === 0 || password.trim().length === 0;
+  const isCodeComplete = code.trim().length >= 6;
 
   // Animation
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -51,14 +58,22 @@ export default function LoginScreen() {
 
   async function handleLogin() {
     setError('');
+    if (trimmedUsername.length === 0 || password.trim().length === 0) {
+      setTouched((prev) => ({ ...prev, username: true, password: true }));
+      setError('Enter your username and password to continue.');
+      return;
+    }
+
     setLoading(true);
     try {
-      const res = await login({ username, password });
+      const res = await login({ username: trimmedUsername, password });
       if (res?.status === 'TWOFA_REQUIRED') {
         setTicket(res.ticket);
         setStep('2fa');
+        setCode('');
+        setTouched((prev) => ({ ...prev, code: false }));
       } else {
-        router.replace('/notifications');
+        router.replace('/home');
       }
     } catch (e) {
       console.error('[login] error', e);
@@ -70,10 +85,16 @@ export default function LoginScreen() {
 
   async function handleVerify2FA() {
     setError('');
+    if (!isCodeComplete) {
+      setTouched((prev) => ({ ...prev, code: true }));
+      setError('Enter the 6-digit code from your authenticator app.');
+      return;
+    }
+
     setLoading(true);
     try {
       const res = await login({ ticket, code });
-      if (res?.ok) router.replace('/notifications');
+      if (res?.ok) router.replace('/home');
       else setError('2FA failed');
     } catch (e) {
       setError('2FA failed');
@@ -118,58 +139,73 @@ export default function LoginScreen() {
             behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           >
             <View style={styles.form}>
-              {step === 'login' && (
-                <>
-                  <View style={styles.inputWrap}>
-                    <FontAwesome5 name="user" style={styles.icon} />
-                    <TextInput
-                      style={styles.input}
-                      placeholder="Enter your username"
-                      placeholderTextColor="#888"
-                      autoCapitalize="none"
-                      value={username}
-                      onChangeText={setUsername}
-                    />
-                  </View>
+                {step === 'login' && (
+                  <>
+                    <View style={styles.inputWrap}>
+                      <FontAwesome5 name="user" style={styles.icon} />
+                      <TextInput
+                        style={styles.input}
+                        placeholder="Enter your username"
+                        placeholderTextColor="#888"
+                        autoCapitalize="none"
+                        value={username}
+                        onChangeText={setUsername}
+                        onBlur={() => setTouched((prev) => ({ ...prev, username: true }))}
+                      />
+                    </View>
+                    {touched.username && trimmedUsername.length === 0 ? (
+                      <Text style={styles.helper}>Username is required.</Text>
+                    ) : null}
 
-                  <View style={styles.inputWrap}>
-                    <FontAwesome5 name="lock" style={styles.icon} />
-                    <TextInput
-                      style={styles.input}
-                      placeholder="Enter your password"
-                      placeholderTextColor="#888"
-                      secureTextEntry
-                      value={password}
-                      onChangeText={setPassword}
-                    />
-                  </View>
+                    <View style={styles.inputWrap}>
+                      <FontAwesome5 name="lock" style={styles.icon} />
+                      <TextInput
+                        style={styles.input}
+                        placeholder="Enter your password"
+                        placeholderTextColor="#888"
+                        secureTextEntry
+                        value={password}
+                        onChangeText={setPassword}
+                        onBlur={() => setTouched((prev) => ({ ...prev, password: true }))}
+                      />
+                    </View>
+                    {touched.password && password.trim().length === 0 ? (
+                      <Text style={styles.helper}>Password is required.</Text>
+                    ) : null}
 
-                  {error ? <Text style={styles.error}>{error}</Text> : null}
+                    {error ? <Text style={styles.error}>{error}</Text> : null}
 
-                  <TouchableOpacity
-                    style={[styles.btn, loading && { opacity: 0.7 }]}
-                    onPress={handleLogin}
-                    disabled={loading}
-                  >
-                    <LinearGradient
-                      colors={['#ff4655', '#ff6b6b']}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 1 }}
-                      style={styles.btnInner}
+                    <TouchableOpacity
+                      style={[styles.btn, (loading || isLoginDisabled) && styles.btnDisabled]}
+                      onPress={handleLogin}
+                      disabled={isLoginDisabled}
                     >
-                      {loading ? (
-                        <View style={styles.spinner} />
-                      ) : (
-                        <Text style={styles.btnText}>Login</Text>
-                      )}
-                    </LinearGradient>
-                  </TouchableOpacity>
-                </>
-              )}
+                      <LinearGradient
+                        colors={['#ff4655', '#ff6b6b']}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                        style={styles.btnInner}
+                      >
+                        {loading ? (
+                          <ActivityIndicator color="#fff" />
+                        ) : (
+                          <Text style={styles.btnText}>Login</Text>
+                        )}
+                      </LinearGradient>
+                    </TouchableOpacity>
+
+                    <Text style={styles.hint}>
+                      By signing in you agree to follow community rules and best practices.
+                    </Text>
+                  </>
+                )}
 
               {step === '2fa' && (
                 <>
                   <Text style={styles.label}>Enter your 2FA code</Text>
+                  <Text style={styles.hint}>
+                    Open your authenticator app and type the 6-digit code for Invidious.
+                  </Text>
                   <View style={styles.inputWrap}>
                     <FontAwesome5 name="key" style={styles.icon} />
                     <TextInput
@@ -179,13 +215,17 @@ export default function LoginScreen() {
                       keyboardType="numeric"
                       value={code}
                       onChangeText={setCode}
+                      onBlur={() => setTouched((prev) => ({ ...prev, code: true }))}
                     />
                   </View>
+                  {touched.code && !isCodeComplete ? (
+                    <Text style={styles.helper}>Enter a 6-digit code to continue.</Text>
+                  ) : null}
                   {error ? <Text style={styles.error}>{error}</Text> : null}
                   <TouchableOpacity
-                    style={[styles.btn, loading && { opacity: 0.7 }]}
+                    style={[styles.btn, (loading || !isCodeComplete) && styles.btnDisabled]}
                     onPress={handleVerify2FA}
-                    disabled={loading}
+                    disabled={loading || !isCodeComplete}
                   >
                     <LinearGradient
                       colors={['#ff4655', '#ff6b6b']}
@@ -194,12 +234,26 @@ export default function LoginScreen() {
                       style={styles.btnInner}
                     >
                       {loading ? (
-                        <View style={styles.spinner} />
+                        <ActivityIndicator color="#fff" />
                       ) : (
                         <Text style={styles.btnText}>Verify</Text>
                       )}
                     </LinearGradient>
                   </TouchableOpacity>
+                  <View style={styles.twoFaActions}>
+                    <TouchableOpacity
+                      style={styles.secondaryBtn}
+                      onPress={() => {
+                        setStep('login');
+                        setCode('');
+                        setTicket(null);
+                        setError('');
+                        setTouched((prev) => ({ ...prev, code: false }));
+                      }}
+                    >
+                      <Text style={styles.secondaryBtnText}>Back to login</Text>
+                    </TouchableOpacity>
+                  </View>
                 </>
               )}
             </View>
@@ -281,6 +335,9 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     marginTop: 8,
   },
+  btnDisabled: {
+    opacity: 0.6,
+  },
   btnInner: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -295,17 +352,32 @@ const styles = StyleSheet.create({
     color: '#fff',
     marginBottom: 8,
   },
+  hint: {
+    color: '#bbb',
+    fontSize: 13,
+    marginTop: 12,
+    lineHeight: 18,
+  },
   error: {
     color: '#f87171',
     marginBottom: 8,
   },
-  spinner: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    borderWidth: 2,
-    borderColor: '#fff',
-    borderRightColor: 'transparent',
-    animationKeyframes: [{ transform: [{ rotate: '360deg' }] }],
+  helper: {
+    color: '#fca5a5',
+    fontSize: 12,
+    marginTop: -8,
+    marginBottom: 12,
+  },
+  twoFaActions: {
+    marginTop: 16,
+    alignItems: 'center',
+  },
+  secondaryBtn: {
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+  },
+  secondaryBtnText: {
+    color: '#ff6b6b',
+    fontWeight: '600',
   },
 });

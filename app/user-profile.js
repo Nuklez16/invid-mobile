@@ -26,8 +26,12 @@ export default function UserProfileScreen() {
 
     const loadUserProfile = async () => {
         try {
+            const profileEndpoint = username
+                ? `/user/profile/${username}`
+                : '/user/profile';
+
             // Use authedFetch for automatic token refresh
-            const response = await authedFetch(`/user/profile/${username}`);
+            const response = await authedFetch(profileEndpoint);
 
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}`);
@@ -67,7 +71,7 @@ export default function UserProfileScreen() {
             }
             
             // For other users, use the friends endpoint
-            const response = await authedFetch(`/user/${username}/friends`);
+            const response = await authedFetch(`/user/${profileData.username}/friends`);
             if (response.ok) {
                 const data = await response.json();
                 if (data.success) {
