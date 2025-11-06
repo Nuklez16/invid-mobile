@@ -66,13 +66,10 @@ function isTokenExpired(token, tokenType = "access") {
 export function AuthProvider({ children }) {
   const [isLoading, setIsLoading] = useState(true);
   const [user, setUser] = useState(null);
-  const [userProfile, setUserProfile] = useState(null); // ← Moved up with other state
+  const [userProfile, setUserProfile] = useState(null);
   const [accessToken, setAccessToken] = useState("");
   const [refreshToken, setRefreshToken] = useState("");
   const [pushToken, setPushToken] = useState(null);
-
-  const SESSION_EXPIRED_MESSAGE = "Your session expired. Please sign in again.";
-  const RESTORE_SESSION_MESSAGE = "We couldn't restore your session. Please sign in again.";
 
   const SESSION_EXPIRED_MESSAGE = "Your session expired. Please sign in again.";
   const RESTORE_SESSION_MESSAGE = "We couldn't restore your session. Please sign in again.";
@@ -99,7 +96,7 @@ export function AuthProvider({ children }) {
     }
   }, [accessToken, isLoading, loadUserProfile]);
 
-  // 🚪 Logout
+  // 🚪 Logout - Fixed: Removed duplicate definition
   const handleLogout = useCallback(
     async (options) => {
       const normalized =
@@ -115,7 +112,7 @@ export function AuthProvider({ children }) {
       }
       await clearSession();
       setUser(null);
-      setUserProfile(null); // ← Clear profile on logout
+      setUserProfile(null);
       setAccessToken("");
       setRefreshToken("");
       setPushToken(null);
@@ -126,22 +123,6 @@ export function AuthProvider({ children }) {
     },
     [refreshToken]
   );
-  const handleLogout = useCallback(async () => {
-    try {
-      if (refreshToken) {
-        await apiLogout();
-      }
-    } catch (_) {
-      console.warn("Logout API call failed, clearing local session anyway");
-    }
-    await clearSession();
-    setUser(null);
-    setUserProfile(null); // ← Clear profile on logout
-    setAccessToken("");
-    setRefreshToken("");
-    setPushToken(null);
-    router.replace("/login");
-  }, [refreshToken]);
 
   // 🔁 Refresh token logic
   const handleRefresh = useCallback(async () => {
@@ -157,12 +138,11 @@ export function AuthProvider({ children }) {
     } catch (err) {
       console.warn("❌ Refresh failed", err);
       await handleLogout({ reason: SESSION_EXPIRED_MESSAGE });
-      await handleLogout();
       throw err;
     }
   }, [refreshToken, handleLogout]);
 
-  // 🔓 Load session on boot
+  // 🔓 Load session on boot - Fixed: Removed duplicate logout calls and cleaned up logic
   useEffect(() => {
     let isMounted = true;
 
@@ -247,21 +227,12 @@ export function AuthProvider({ children }) {
       } finally {
         if (isMounted) setIsLoading(false);
       }
-            await handleLogout();
-          }
-        }
-      } catch (error) {
-        console.warn("❌ Error loading session:", error);
-        if (isMounted) await handleLogout();
-      } finally {
-        if (isMounted) setIsLoading(false);
-      }
     })();
 
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [handleLogout]);
 
   // 📱 Initialize push token after auth is loaded and we have access token
   useEffect(() => {
@@ -317,7 +288,7 @@ export function AuthProvider({ children }) {
         login: handleLogin,
         logout: handleLogout,
         refreshAccessToken: handleRefresh,
-        loadUserProfile, // ← Don't forget to expose this!
+        loadUserProfile,
       }}
     >
       {children}
