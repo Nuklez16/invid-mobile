@@ -74,6 +74,9 @@ export function AuthProvider({ children }) {
   const SESSION_EXPIRED_MESSAGE = "Your session expired. Please sign in again.";
   const RESTORE_SESSION_MESSAGE = "We couldn't restore your session. Please sign in again.";
 
+  const SESSION_EXPIRED_MESSAGE = "Your session expired. Please sign in again.";
+  const RESTORE_SESSION_MESSAGE = "We couldn't restore your session. Please sign in again.";
+
   // Add this function to load user profile
   const loadUserProfile = useCallback(async () => {
     if (!accessToken) return;
