@@ -6,7 +6,8 @@ import {
     ScrollView,
     StyleSheet,
     TouchableOpacity,
-    Alert
+    Alert,
+    Image
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { useAuthContext } from '../src/context/AuthContext';
@@ -17,7 +18,7 @@ export default function UserProfileScreen() {
     const { username } = useLocalSearchParams();
     const { accessToken, user: currentUser } = useAuthContext();
     const [profile, setProfile] = useState(null);
-    const [friends, setFriends] = useState([]); // Add missing friends state
+    const [friends, setFriends] = useState([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
@@ -96,6 +97,56 @@ export default function UserProfileScreen() {
         });
     };
 
+    // Render avatar component
+    const renderAvatar = () => {
+        const avatarUrl = profile?.avatarUrl;
+        
+        if (avatarUrl) {
+            return (
+                <Image 
+                    source={{ 
+                        uri: avatarUrl,
+                        cache: 'force-cache'
+                    }}
+                    style={styles.avatar}
+                    onError={(error) => {
+                        console.log('Avatar loading failed, using fallback:', error.nativeEvent.error);
+                    }}
+                />
+            );
+        }
+        
+        // Fallback to icon if no avatar
+        return (
+            <View style={styles.avatarPlaceholder}>
+                <Ionicons name="person" size={24} color="#fff" />
+            </View>
+        );
+    };
+
+    // Render friend avatar (for friends list)
+    const renderFriendAvatar = (friend) => {
+        const avatarUrl = friend.avatarUrl;
+        
+        if (avatarUrl) {
+            return (
+                <Image 
+                    source={{ uri: avatarUrl }}
+                    style={styles.friendAvatar}
+                    onError={(error) => {
+                        console.log('Friend avatar loading failed:', error.nativeEvent.error);
+                    }}
+                />
+            );
+        }
+        
+        return (
+            <View style={styles.friendAvatarPlaceholder}>
+                <Ionicons name="person" size={16} color="#fff" />
+            </View>
+        );
+    };
+
     if (loading) {
         return (
             <View style={styles.loadingContainer}>
@@ -117,9 +168,9 @@ export default function UserProfileScreen() {
             {/* Profile Header */}
             <View style={styles.profileSection}>
                 <View style={styles.profileHeader}>
-                    <View style={styles.avatar}>
-                        <Ionicons name="person" size={40} color="#fff" />
-                    </View>
+                    {/* Avatar */}
+                    {renderAvatar()}
+                    
                     <View style={styles.profileInfo}>
                         <Text style={styles.username}>{profile.username}</Text>
                         <Text style={styles.role}>{profile.role}</Text>
@@ -133,7 +184,7 @@ export default function UserProfileScreen() {
                 </View>
 
                 {/* Friend Status/Actions - Only show for other users */}
-                {!profile.isOwnProfile && currentUser && ( // Added currentUser check
+                {!profile.isOwnProfile && currentUser && (
                     <View style={styles.actionsContainer}>
                         {profile.isFriend ? (
                             <View style={styles.friendStatus}>
@@ -195,18 +246,21 @@ export default function UserProfileScreen() {
             {/* Friends Section - ALWAYS DISPLAYS */}
             <View style={styles.section}>
                 <Text style={styles.sectionTitle}>
-                    Friends ({friends.length}) {/* Use friends state instead of profile.friends */}
+                    Friends ({friends.length})
                 </Text>
                 {friends.length > 0 ? (
                     <View style={styles.friendsList}>
                         {friends.map((friend, index) => (
                             <TouchableOpacity
                                 key={index}
-                                onPress={() => handleFriendPress(friend.username || friend)} // Handle both object and string formats
+                                onPress={() => handleFriendPress(friend.username || friend)}
                                 style={styles.friendItem}
                             >
+                                {/* Friend Avatar */}
+                                {renderFriendAvatar(friend)}
+                                
                                 <Text style={styles.friendName}>
-                                    {friend.username || friend} {/* Handle both object and string formats */}
+                                    {friend.username || friend}
                                 </Text>
                             </TouchableOpacity>
                         ))}
@@ -238,6 +292,7 @@ export default function UserProfileScreen() {
         </ScrollView>
     );
 }
+
 const styles = StyleSheet.create({
     loadingContainer: {
         flex: 1,
@@ -277,6 +332,13 @@ const styles = StyleSheet.create({
         marginBottom: 16,
     },
     avatar: {
+        width: 60,
+        height: 60,
+        borderRadius: 30,
+        backgroundColor: '#333',
+        marginRight: 16,
+    },
+    avatarPlaceholder: {
         width: 60,
         height: 60,
         borderRadius: 30,
@@ -422,16 +484,34 @@ const styles = StyleSheet.create({
         flexWrap: 'wrap',
     },
     friendItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginRight: 12,
+        marginBottom: 12,
+        backgroundColor: '#333',
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        borderRadius: 20,
+    },
+    friendAvatar: {
+        width: 24,
+        height: 24,
+        borderRadius: 12,
         marginRight: 8,
-        marginBottom: 8,
+    },
+    friendAvatarPlaceholder: {
+        width: 24,
+        height: 24,
+        borderRadius: 12,
+        backgroundColor: '#555',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 8,
     },
     friendName: {
         color: '#fff',
-        backgroundColor: '#333',
-        paddingHorizontal: 12,
-        paddingVertical: 6,
-        borderRadius: 16,
         fontSize: 12,
+        fontWeight: '500',
     },
     statsGrid: {
         flexDirection: 'row',

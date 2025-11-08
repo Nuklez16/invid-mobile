@@ -59,6 +59,21 @@ function LayoutContent() {
     title: 'User Profile',
   }} 
 />
+<Stack.Screen
+  name="forums/topic/[id]"
+  options={{ title: 'Loading Topic...' }}
+/>
+
+<Stack.Screen
+  name="forums/category/[slug]"
+  options={{ title: 'Loading Category...' }}
+/>
+<Stack.Screen 
+  name="forums/index" 
+  options={{ 
+    title: 'Forums',
+  }} 
+/>
       
       {/* Debug Screen */}
       <Stack.Screen 
@@ -78,6 +93,7 @@ function LayoutContent() {
       />
       
       {/* Add other screens as needed */}
+	  
     </Stack>
   );
 }

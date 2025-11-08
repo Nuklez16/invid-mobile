@@ -72,14 +72,6 @@ export default function LoginScreen() {
         setStep('2fa');
         setCode('');
         setTouched((prev) => ({ ...prev, code: false }));
-  async function handleLogin() {
-    setError('');
-    setLoading(true);
-    try {
-      const res = await login({ username, password });
-      if (res?.status === 'TWOFA_REQUIRED') {
-        setTicket(res.ticket);
-        setStep('2fa');
       } else {
         router.replace('/home');
       }
@@ -101,13 +93,12 @@ export default function LoginScreen() {
 
     setLoading(true);
     try {
-  async function handleVerify2FA() {
-    setError('');
-    setLoading(true);
-    try {
       const res = await login({ ticket, code });
-      if (res?.ok) router.replace('/home');
-      else setError('2FA failed');
+      if (res?.ok) {
+        router.replace('/home');
+      } else {
+        setError('2FA failed');
+      }
     } catch (e) {
       setError('2FA failed');
     } finally {
@@ -137,7 +128,7 @@ export default function LoginScreen() {
           <View style={styles.header}>
             <Text style={styles.title}>Login to your Invidious Account</Text>
             <Text style={styles.subtitle}>
-              Don’t have an account?{' '}
+              Don't have an account?{' '}
               <Text
                 style={styles.link}
                 onPress={() => router.push('/register')}

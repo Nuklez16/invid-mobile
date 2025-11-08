@@ -1,6 +1,6 @@
 // app/home.js
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, RefreshControl, Image } from 'react-native';
 import { useAuthContext } from '../src/context/AuthContext';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -57,7 +57,9 @@ export default function HomeScreen() {
     matchStats: {
       totalPugMatches: null,
       totalTournamentMatches: null
-    }
+    },
+    avatarUrl: null,
+    isOnline: false
   };
 
   // Use real data from API, fallback to basic user info
@@ -81,7 +83,6 @@ export default function HomeScreen() {
 
   // Function to handle friend click
   const handleFriendPress = (friendUsername) => {
-    // Navigate to user profile with the friend's username
     router.push({
       pathname: '/user-profile',
       params: { username: friendUsername }
@@ -94,6 +95,31 @@ export default function HomeScreen() {
       pathname: '/user-profile',
       params: { username: profileData.username }
     });
+  };
+
+  // Render avatar component
+  const renderAvatar = () => {
+    const avatarUrl = profileData.avatarUrl;
+    
+    if (avatarUrl) {
+      return (
+        <Image 
+          source={{ uri: avatarUrl }}
+          style={styles.avatar}
+          onError={(error) => {
+            console.log('Avatar loading error:', error.nativeEvent.error);
+            // You could set a state here to show fallback on error if needed
+          }}
+        />
+      );
+    }
+    
+    // Fallback to icon if no avatar
+    return (
+      <View style={styles.avatarPlaceholder}>
+        <Ionicons name="person" size={24} color="#fff" />
+      </View>
+    );
   };
 
   return (
@@ -112,9 +138,9 @@ export default function HomeScreen() {
       <TouchableOpacity onPress={handleViewOwnProfile}>
         <View style={styles.profileSection}>
           <View style={styles.profileHeader}>
-            <View style={styles.avatar}>
-              <Ionicons name="person" size={40} color="#fff" />
-            </View>
+            {/* Avatar */}
+            {renderAvatar()}
+            
             <View style={styles.profileInfo}>
               <Text style={styles.username}>{displayValue(profileData.username, user?.username || 'Unknown')}</Text>
               <Text style={styles.role}>{displayValue(profileData.role, 'Member')}</Text>
@@ -174,6 +200,7 @@ export default function HomeScreen() {
         </View>
       </TouchableOpacity>
 
+      {/* Rest of your component remains the same */}
       {/* Teams Section */}
       {profileData.teams && profileData.teams.length > 0 && (
         <View style={styles.section}>
@@ -276,6 +303,13 @@ const styles = StyleSheet.create({
     height: 60,
     borderRadius: 30,
     backgroundColor: '#333',
+    marginRight: 16,
+  },
+  avatarPlaceholder: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#333',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 16,
@@ -355,6 +389,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 8,
   },
+  // ... rest of your styles remain the same
   section: {
     backgroundColor: '#1a1a1a',
     padding: 20,

@@ -34,7 +34,7 @@ export async function authedFetch(path, opts = {}) {
         ...headers,
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
-      body: body ? JSON.stringify(body) : undefined,
+      body: body, // Remove JSON.stringify() here - let caller handle it
     });
     return res;
   };

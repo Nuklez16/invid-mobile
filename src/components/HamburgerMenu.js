@@ -20,7 +20,7 @@ export default function HamburgerMenu() {
     { title: "Home", icon: "home", onPress: () => { setIsVisible(false); router.push("/home"); } },
     { title: "Notifications", icon: "notifications", onPress: () => { setIsVisible(false); router.push("/notifications"); } },
     { title: "Messages", icon: "chatbubble", onPress: () => { setIsVisible(false); alert("Messages feature coming soon!"); } },
-    { title: "Forum", icon: "people", onPress: () => { setIsVisible(false); alert("Forum feature coming soon!"); } },
+    { title: "Forum", icon: "people", onPress:  () => { setIsVisible(false); router.push("/forums") } },
     { title: "Competitions", icon: "trophy", onPress: () => { setIsVisible(false); alert("Competitions feature coming soon!"); } },
     { title: "Debug", icon: "bug", onPress: () => { setIsVisible(false); router.push("/debug"); } },
     { title: "Settings", icon: "settings", onPress: () => { setIsVisible(false); alert("Settings feature coming soon!"); } },

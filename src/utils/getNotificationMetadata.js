@@ -4,16 +4,23 @@ export default function getNotificationMetadata(notif) {
   const id = notif.id;
 
   switch (type) {
+    // ───────────────────────────────
+    // Forum mentions
     case 'forum_mention': {
       const mentioner = data.mentioner || data.username || 'Someone';
       const topicId = data.topic_id;
       const postId = data.post_id;
       return {
         text: `${mentioner} mentioned you in ${data.topic_title || 'a thread'}`,
-        target: `/forum/thread/${topicId}#post-${postId}`,
+        // ✅ Updated mobile path
+        target: postId
+          ? `/forums/topic/${topicId}?highlight=${postId}`
+          : `/forums/topic/${topicId}`,
       };
     }
 
+    // ───────────────────────────────
+    // Replies to your thread
     case 'forum_reply': {
       const usernames = data.usernames || [];
       let userText = 'Someone replied to your thread';
@@ -24,50 +31,57 @@ export default function getNotificationMetadata(notif) {
         userText = `${usernames.length} people replied to your thread`;
       }
 
-      // Handle missing post_id gracefully
       const topicId = data.topic_id;
       const postId = data.post_id;
-      const target = postId 
-        ? `/forum/thread/${topicId}#post-${postId}`
-        : `/forum/thread/${topicId}`;
+      const target = postId
+        ? `/forums/topic/${topicId}?highlight=${postId}`
+        : `/forums/topic/${topicId}`;
 
       return {
         text: userText,
-        target: target,
+        target,
         excerpt: data.excerpt || '<p>New reply</p>',
         threadLink: target,
         threadTitle: data.topic_title || 'Thread',
-        replierUsername: usernames.length > 0 ? usernames[0] : 'Someone'
+        replierUsername: usernames.length > 0 ? usernames[0] : 'Someone',
       };
     }
 
+    // ───────────────────────────────
+    // Replies in watched threads
     case 'forum_thread_activity': {
       return {
         text: `${data.username || 'Someone'} replied in a thread you're watching: ${data.topic_title}`,
-        target: `/forum/thread/${data.topic_id}`,
+        target: `/forums/topic/${data.topic_id}`,
       };
     }
 
+    // ───────────────────────────────
+    // Match chat messages
     case 'match_chat':
       return {
         text: `New message in your match chat`,
         target: `/tournaments/matches/${data.matchId}`,
       };
 
+    // ───────────────────────────────
+    // Match reminders
     case 'match_reminder_soon':
       return {
         text: `Reminder: Your match is starting soon`,
         target: `/tournaments/matches/${data.matchId}`,
       };
 
+    // ───────────────────────────────
+    // Team invites
     case 'team_invite':
       return {
         text: `You've been invited to join ${data.team_name || 'a team'}`,
         target: `/user/manageteams`,
       };
 
-    // ──────────────────────────────────────────────────────────────
-    // NEW: Direct message notifications
+    // ───────────────────────────────
+    // Direct messages
     case 'directmessage':
     case 'direct_message':
     case 'directMessage': {
@@ -84,11 +98,14 @@ export default function getNotificationMetadata(notif) {
         text: preview
           ? `New message from ${sender}: ${preview}`
           : `New message from ${sender}`,
-        target: conversationId ? `/user/discussion/${conversationId}` : `/messages`,
+        target: conversationId
+          ? `/user/discussion/${conversationId}`
+          : `/messages`,
       };
     }
 
-    // NEW: PUG ready reminder notifications
+    // ───────────────────────────────
+    // PUG ready reminder
     case 'pug_ready_reminder': {
       const lobbyId = `${data.lobbyId || data.lobby_id || data.lobby || ''}`.trim();
       const msg = data.message || 'Your PUG is about to start! Please ready up.';
@@ -97,8 +114,9 @@ export default function getNotificationMetadata(notif) {
         target: lobbyId ? `/lobby/${lobbyId}` : `/pugs`,
       };
     }
-    // ──────────────────────────────────────────────────────────────
 
+    // ───────────────────────────────
+    // Fallback for match updates
     default: {
       if (String(type).startsWith('match_')) {
         return {
