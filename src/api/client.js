@@ -52,9 +52,10 @@ export async function authedFetch(path, opts = {}) {
       
       if (data.accessToken) {
         // Save new tokens using the consistent function
-        await saveTokens({ 
-          accessToken: data.accessToken, 
-          refreshToken: data.refreshToken || refreshToken 
+        await saveTokens({
+          accessToken: data.accessToken,
+          refreshToken: data.refreshToken,
+          fallbackRefreshToken: refreshToken,
         });
         
         // Retry the original request with new access token

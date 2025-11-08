@@ -30,12 +30,25 @@ export async function clearSession() {
   await AsyncStorage.multiRemove([KEYS.ACCESS, KEYS.REFRESH, KEYS.USER]);
 }
 
-export async function saveTokens({ accessToken, refreshToken }) {
+export async function saveTokens({
+  accessToken,
+  refreshToken,
+  fallbackRefreshToken,
+}) {
+  const tasks = [];
+
   if (accessToken) {
-    await AsyncStorage.setItem(KEYS.ACCESS, accessToken);
+    tasks.push(AsyncStorage.setItem(KEYS.ACCESS, accessToken));
   }
-  if (refreshToken) {
-    await AsyncStorage.setItem(KEYS.REFRESH, refreshToken);
+
+  const resolvedRefreshToken = refreshToken || fallbackRefreshToken;
+
+  if (resolvedRefreshToken) {
+    tasks.push(AsyncStorage.setItem(KEYS.REFRESH, resolvedRefreshToken));
+  }
+
+  if (tasks.length) {
+    await Promise.all(tasks);
   }
 }
 

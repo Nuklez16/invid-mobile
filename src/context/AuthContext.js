@@ -5,8 +5,9 @@ import React, {
   useState,
   useCallback,
   useContext,
+  useRef,
 } from "react";
-import { Alert } from "react-native";
+import { Alert, AppState } from "react-native";
 import {
   saveSession,
   loadSession,
@@ -70,6 +71,9 @@ export function AuthProvider({ children }) {
   const [accessToken, setAccessToken] = useState("");
   const [refreshToken, setRefreshToken] = useState("");
   const [pushToken, setPushToken] = useState(null);
+  const appState = useRef(AppState.currentState);
+
+
 
   const SESSION_EXPIRED_MESSAGE = "Your session expired. Please sign in again.";
   const RESTORE_SESSION_MESSAGE = "We couldn't restore your session. Please sign in again.";
@@ -125,15 +129,28 @@ export function AuthProvider({ children }) {
   );
 
   // 🔁 Refresh token logic
-  const handleRefresh = useCallback(async () => {
+ const handleRefresh = useCallback(async () => {
+    const activeRefreshToken = refreshToken;
+
+    if (!activeRefreshToken) {
+      console.warn("❌ Refresh requested without a refresh token");
+      await handleLogout({ reason: SESSION_EXPIRED_MESSAGE });
+      throw new Error("Missing refresh token");
+    }
+
     try {
-      const newTokens = await apiRefresh({ refreshToken });
+      const newTokens = await apiRefresh({ refreshToken: activeRefreshToken });
+      const nextRefreshToken = newTokens.refreshToken || activeRefreshToken;
+
       setAccessToken(newTokens.accessToken);
-      setRefreshToken(newTokens.refreshToken);
+      setRefreshToken(nextRefreshToken);
+
       await saveTokens({
         accessToken: newTokens.accessToken,
         refreshToken: newTokens.refreshToken,
+        fallbackRefreshToken: activeRefreshToken,
       });
+
       return newTokens.accessToken;
     } catch (err) {
       console.warn("❌ Refresh failed", err);
@@ -141,7 +158,6 @@ export function AuthProvider({ children }) {
       throw err;
     }
   }, [refreshToken, handleLogout]);
-
   // 🔓 Load session on boot - Fixed: Removed duplicate logout calls and cleaned up logic
   useEffect(() => {
     let isMounted = true;
@@ -209,7 +225,8 @@ export function AuthProvider({ children }) {
             setRefreshToken(newTokens.refreshToken || sess.refreshToken);
             await saveTokens({
               accessToken: newTokens.accessToken,
-              refreshToken: newTokens.refreshToken || sess.refreshToken,
+              refreshToken: newTokens.refreshToken,
+              fallbackRefreshToken: sess.refreshToken,
             });
           } else {
             throw new Error("No access token in refresh response");
@@ -232,26 +249,72 @@ export function AuthProvider({ children }) {
     return () => {
       isMounted = false;
     };
-  }, [handleLogout]);
+   }, [handleLogout]);
 
-  // 📱 Initialize push token after auth is loaded and we have access token
   useEffect(() => {
+    if (isLoading) return;
+
+    const subscription = AppState.addEventListener("change", (nextAppState) => {
+      const previousState = appState.current;
+      appState.current = nextAppState;
+
+      if (
+        previousState?.match(/inactive|background/) &&
+        nextAppState === "active" &&
+        refreshToken
+      ) {
+        const accessNeedsRefresh =
+          !accessToken || isTokenExpired(accessToken, "access");
+
+        if (accessNeedsRefresh) {
+          handleRefresh().catch((err) =>
+            console.warn("❌ Failed to refresh on foreground:", err?.message || err)
+          );
+        }
+      }
+    });
+
+    return () => {
+      subscription?.remove?.();
+    };
+  }, [accessToken, refreshToken, handleRefresh, isLoading]);
+  
+   // 📱 Initialize push token after auth is loaded and we have access token
+
+  useEffect(() => {
+
     if (!accessToken || isLoading) return;
 
+
+
     (async () => {
+
       try {
+
         console.log('📱 Initializing push token system...');
+
         
+
         // Dynamically import the push token service to avoid circular deps
+
         const { initializePushToken } = await import('../services/pushTokenService');
+
         const token = await initializePushToken(accessToken);
+
         setPushToken(token);
+
         
+
       } catch (error) {
+
         console.warn('📱 Push token initialization failed:', error);
+
       }
+
     })();
+
   }, [accessToken, isLoading]);
+
 
   // 🔑 Login / 2FA
   const handleLogin = useCallback(async ({ username, password, code, ticket }) => {
