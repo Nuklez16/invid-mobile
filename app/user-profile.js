@@ -39,7 +39,7 @@ export default function UserProfileScreen() {
             }
 
             const data = await response.json();
-            console.log('🔍 PROFILE DATA:', data); // Debug log
+
 
             if (data.success) {
                 setProfile(data.profile);
@@ -110,7 +110,7 @@ export default function UserProfileScreen() {
                     }}
                     style={styles.avatar}
                     onError={(error) => {
-                        console.log('Avatar loading failed, using fallback:', error.nativeEvent.error);
+
                     }}
                 />
             );
@@ -134,7 +134,7 @@ export default function UserProfileScreen() {
                     source={{ uri: avatarUrl }}
                     style={styles.friendAvatar}
                     onError={(error) => {
-                        console.log('Friend avatar loading failed:', error.nativeEvent.error);
+
                     }}
                 />
             );

@@ -1,4 +1,3 @@
-// app/_layout.js
 import React from 'react';
 import { Stack } from 'expo-router';
 import RootProvider from './RootProvider';
@@ -14,76 +13,74 @@ function LayoutContent() {
   return (
     <Stack
       screenOptions={{
-        headerStyle: {
-          backgroundColor: '#000',
-        },
+        headerStyle: { backgroundColor: '#000' },
         headerTintColor: '#fff',
-        headerTitleStyle: {
-          fontWeight: 'bold',
-          fontSize: 18,
-        },
+        headerTitleStyle: { fontWeight: 'bold', fontSize: 18 },
         headerLeft: headerLeft,
       }}
     >
-      {/* Home Screen */}
+
+      {/* Home */}
       <Stack.Screen 
         name="home" 
-        options={{ 
-          title: 'Home',
-        }} 
+        options={{ title: 'Home' }} 
       />
-      
-      {/* Notifications Screen */}
+
+      {/* Notifications */}
       <Stack.Screen 
         name="notifications" 
-        options={{ 
-          title: 'Notifications',
-        }} 
+        options={{ title: 'Notifications' }} 
       />
-	  
-	  <Stack.Screen 
-  name="search" 
-  options={{ 
-    title: 'Search',
-  }} 
-/>
-<Stack.Screen 
-  name="profile" 
-  options={{ 
-    title: 'Profile',
-  }} 
-/>
-<Stack.Screen 
-  name="user-profile" 
-  options={{ 
-    title: 'User Profile',
-  }} 
-/>
-<Stack.Screen
-  name="forums/topic/[id]"
-  options={{ title: 'Loading Topic...' }}
-/>
 
-<Stack.Screen
-  name="forums/category/[slug]"
-  options={{ title: 'Loading Category...' }}
-/>
-<Stack.Screen 
-  name="forums/index" 
-  options={{ 
-    title: 'Forums',
-  }} 
-/>
-      
-      {/* Debug Screen */}
+      {/* Search */}
+      <Stack.Screen 
+        name="search" 
+        options={{ title: 'Search' }} 
+      />
+
+      {/* Profile */}
+      <Stack.Screen 
+        name="profile" 
+        options={{ title: 'Profile' }} 
+      />
+
+      {/* User Profile */}
+      <Stack.Screen 
+        name="user-profile" 
+        options={{ title: 'User Profile' }} 
+      />
+
+      {/* Forums */}
+      <Stack.Screen 
+        name="forums/index" 
+        options={{ title: 'Forums' }} 
+      />
+      <Stack.Screen
+        name="forums/topic/[id]"
+        options={{ title: 'Loading Topic...' }}
+      />
+      <Stack.Screen
+        name="forums/category/[slug]"
+        options={{ title: 'Loading Category...' }}
+      />
+
+      {/* News */}
+      <Stack.Screen 
+        name="news/index" 
+        options={{ title: 'News' }} 
+      />
+      <Stack.Screen 
+        name="news/[slug]" 
+        options={{ title: 'Article' }} 
+      />
+
+      {/* Debug */}
       <Stack.Screen 
         name="debug" 
-        options={{ 
-          title: 'Debug',
-        }} 
+        options={{ title: 'Debug' }} 
       />
-      
-      {/* Login Screen - No hamburger menu */}
+
+      {/* Login */}
       <Stack.Screen 
         name="login" 
         options={{ 
@@ -91,9 +88,7 @@ function LayoutContent() {
           headerLeft: undefined, // Explicitly remove hamburger from login
         }} 
       />
-      
-      {/* Add other screens as needed */}
-	  
+
     </Stack>
   );
 }
