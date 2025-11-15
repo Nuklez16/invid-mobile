@@ -1,23 +1,16 @@
 // src/api/client.js
 import { getTokens, saveTokens, clearSession } from '../storage/authStorage';
-import { apiUrl } from '../config/api';
 import { router } from 'expo-router';
-import { apiRefresh } from './auth';
-
-function buildUrl(path) {
-  const p = String(path || '').startsWith('/') ? path : `/${path}`;
-  const url = apiUrl(p);
-  return url;
-}
+import { rawFetch, buildUrl } from './raw';
+import { performTokenRefresh } from './refreshToken';
 
 export async function authedFetch(path, opts = {}) {
   const { method = 'GET', body, headers = {} } = opts;
 
-  // 1) Load tokens from storage
+  // Load tokens from secure storage
   const { accessToken, refreshToken } = await getTokens();
 
-  // Check if tokens are empty strings (not just falsy)
-  if (!accessToken || accessToken === '' || !refreshToken || refreshToken === '') {
+  if (!accessToken || !refreshToken) {
     console.warn('❌ Missing tokens, redirecting to login');
     await clearSession();
     router.replace('/login');
@@ -27,46 +20,43 @@ export async function authedFetch(path, opts = {}) {
   const endpoint = buildUrl(path);
 
   const doRequest = async (token) => {
-    const res = await fetch(endpoint, {
+    return fetch(endpoint, {
       method,
       headers: {
         'Content-Type': 'application/json',
         ...headers,
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
-      body: body, // Remove JSON.stringify() here - let caller handle it
+      body: body, // caller must JSON.stringify
     });
-    return res;
   };
 
-  // 2) First attempt with current access token
+  // First request attempt
   let res = await doRequest(accessToken);
 
-  // 3) If unauthorized, use the centralized apiRefresh function
+  // If token expired → refresh
   if (res.status === 401 && refreshToken) {
     try {
-      console.log('🔄 Token expired, attempting refresh...');
+      console.log('🔄 Token expired, refreshing...');
       
-      // Use the apiRefresh function from auth.js
-      const data = await apiRefresh({ refreshToken });
-      
-      if (data.accessToken) {
-        // Save new tokens using the consistent function
+      const data = await performTokenRefresh(refreshToken);
+
+      if (data?.accessToken) {
+        // Persist new tokens
         await saveTokens({
           accessToken: data.accessToken,
-          refreshToken: data.refreshToken,
-          fallbackRefreshToken: refreshToken,
+          refreshToken: data.refreshToken || refreshToken,
         });
-        
-        // Retry the original request with new access token
+
+        // Retry original request
         res = await doRequest(data.accessToken);
-        console.log('✅ Request retried with fresh token');
+        console.log('✅ Retried with fresh token');
       }
     } catch (error) {
       console.warn('❌ Refresh failed:', error.message);
       await clearSession();
       router.replace('/login');
-      // Return a proper error response instead of throwing
+
       return new Response(JSON.stringify({ error: 'authentication failed' }), { status: 401 });
     }
   }
@@ -74,11 +64,7 @@ export async function authedFetch(path, opts = {}) {
   return res;
 }
 
-export async function rawFetch(path, { method = 'POST', body, headers = {} } = {}) {
-  const endpoint = buildUrl(path);
-  return fetch(endpoint, {
-    method,
-    headers: { 'Content-Type': 'application/json', ...headers },
-    body: body ? JSON.stringify(body) : undefined,
-  });
+// Unauthenticated HTTP wrapper
+export async function rawRequest(path, options = {}) {
+  return rawFetch(path, options);
 }

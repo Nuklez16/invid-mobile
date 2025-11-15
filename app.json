@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "invid-mobile",
+    "name": "invid.au",
     "slug": "invid-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -11,24 +11,20 @@
     "ios": {
       "supportsTablet": true
     },
-    "android": {
-      "googleServicesFile": "./app/google-services.json",
-      
-      "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
-        "monochromeImage": "./assets/images/android-icon-monochrome.png"
-      },
-      "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false,
-      "notification": {
-        "icon": "./assets/images/android-icon-foreground.png",
-        "color": "#ffffff",
-        "priority": "max"
-      },
-      "package": "com.nukleuz.invidmobile"
-    },
+"android": {
+  "googleServicesFile": "./app/google-services.json",
+
+  "softwareKeyboardLayoutMode": "resize",
+
+  "adaptiveIcon": {
+    "foregroundImage": "./assets/images/icon.png",
+    "backgroundColor": "#000000"
+  },
+
+  "edgeToEdgeEnabled": true,
+  "predictiveBackGestureEnabled": false,
+  "package": "com.nukleuz.invidmobile"
+},
     "web": {
       "output": "static",
       "favicon": "./assets/images/favicon.png"
@@ -47,7 +43,8 @@
           }
         }
       ],
-      "expo-notifications"
+      "expo-notifications",
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true,
@@ -62,10 +59,10 @@
     "runtimeVersion": {
       "policy": "appVersion"
     },
-   "updates": {
-  "url": "https://u.expo.dev/49d5b7d8-723b-4cac-839f-1e21bc1a44f8",
-  "enabled": true,
-  "fallbackToCacheTimeout": 0
-}
+    "updates": {
+      "url": "https://u.expo.dev/49d5b7d8-723b-4cac-839f-1e21bc1a44f8",
+      "enabled": true,
+      "fallbackToCacheTimeout": 0
+    }
   }
 }

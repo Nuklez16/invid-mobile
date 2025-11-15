@@ -28,7 +28,7 @@ export default function HamburgerMenu() {
 
     // SOCIAL / COMMUNITY
     { title: "Notifications", icon: "notifications", onPress: () => { setIsVisible(false); router.push("/notifications"); } },
-    { title: "Messages", icon: "chatbubble", onPress: () => { setIsVisible(false); alert("Messages feature coming soon!"); } },
+    { title: "Messages", icon: "chatbubble", onPress: () => { setIsVisible(false); router.push("/messages"); } },
 
     // UTILITY / SYSTEM
     { title: "Settings", icon: "settings", onPress: () => { setIsVisible(false); alert("Settings feature coming soon!"); } },

@@ -1,94 +1,73 @@
+// app/_layout.js
+
 import React from 'react';
 import { Stack } from 'expo-router';
 import RootProvider from './RootProvider';
-import { useAuthContext } from '../src/context/AuthContext';
 import HamburgerMenu from '../src/components/HamburgerMenu';
+import { useAuthContext } from '../src/context/AuthContext';
+import 'react-native-reanimated';
 
-function LayoutContent() {
+function AppStack() {
   const { isLoading, accessToken } = useAuthContext();
+  const showMenu = !isLoading && !!accessToken;
 
-  // Show hamburger menu in header only when authenticated
-  const headerLeft = !isLoading && accessToken ? () => <HamburgerMenu /> : undefined;
+  const withMenu = showMenu
+    ? { headerLeft: () => <HamburgerMenu /> }
+    : {};
 
   return (
     <Stack
       screenOptions={{
         headerStyle: { backgroundColor: '#000' },
         headerTintColor: '#fff',
-        headerTitleStyle: { fontWeight: 'bold', fontSize: 18 },
-        headerLeft: headerLeft,
+        headerTitleStyle: { color: '#fff' },
       }}
     >
+      <Stack.Screen name="index" options={{ headerShown: false }} />
+      <Stack.Screen name="login" options={{ title: 'Login' }} />
 
-      {/* Home */}
-      <Stack.Screen 
-        name="home" 
-        options={{ title: 'Home' }} 
-      />
-
-      {/* Notifications */}
-      <Stack.Screen 
-        name="notifications" 
-        options={{ title: 'Notifications' }} 
-      />
-
-      {/* Search */}
-      <Stack.Screen 
-        name="search" 
-        options={{ title: 'Search' }} 
-      />
-
-      {/* Profile */}
-      <Stack.Screen 
-        name="profile" 
-        options={{ title: 'Profile' }} 
-      />
-
-      {/* User Profile */}
-      <Stack.Screen 
-        name="user-profile" 
-        options={{ title: 'User Profile' }} 
-      />
+      {/* Main */}
+      <Stack.Screen name="home" options={{ title: 'Home', ...withMenu }} />
 
       {/* Forums */}
-      <Stack.Screen 
-        name="forums/index" 
-        options={{ title: 'Forums' }} 
-      />
       <Stack.Screen
-        name="forums/topic/[id]"
-        options={{ title: 'Loading Topic...' }}
-      />
-      <Stack.Screen
-        name="forums/category/[slug]"
-        options={{ title: 'Loading Category...' }}
+        name="forums/index"
+        options={{ title: 'Forums', ...withMenu }}
       />
 
       {/* News */}
-      <Stack.Screen 
-        name="news/index" 
-        options={{ title: 'News' }} 
+      <Stack.Screen
+        name="news/index"
+        options={{ title: 'News', ...withMenu }}
       />
-      <Stack.Screen 
-        name="news/[slug]" 
-        options={{ title: 'Article' }} 
-      />
+	  
+{/* News Article */}
+<Stack.Screen
+  name="news/[slug]"
+  options={{ title: "Loading...", ...withMenu }}
+/>
+{/* Messages Inbox */}
+<Stack.Screen
+  name="messages/index"
+  options={{ title: 'Messages', ...withMenu }}
+/>
 
-      {/* Debug */}
-      <Stack.Screen 
-        name="debug" 
-        options={{ title: 'Debug' }} 
-      />
-
-      {/* Login */}
-      <Stack.Screen 
-        name="login" 
-        options={{ 
-          title: 'Login',
-          headerLeft: undefined, // Explicitly remove hamburger from login
-        }} 
-      />
-
+{/* Message Thread */}
+<Stack.Screen
+  name="messages/[conversationId]"
+  options={{
+    contentStyle: { backgroundColor: "#000" },
+    animation: "fade",
+    // Android keyboard fix
+    headerShown: true
+  }}
+/>
+      {/* Other */}
+      <Stack.Screen name="notifications" options={{ title: 'Notifications', ...withMenu }} />
+      <Stack.Screen name="search" options={{ title: 'Search', ...withMenu }} />
+      <Stack.Screen name="profile" options={{ title: 'Profile', ...withMenu }} />
+      <Stack.Screen name="user-profile" options={{ title: 'User Profile', ...withMenu }} />
+      <Stack.Screen name="debug" options={{ title: 'Debug', ...withMenu }} />
     </Stack>
   );
 }
@@ -96,7 +75,7 @@ function LayoutContent() {
 export default function RootLayout() {
   return (
     <RootProvider>
-      <LayoutContent />
+      <AppStack />
     </RootProvider>
   );
 }

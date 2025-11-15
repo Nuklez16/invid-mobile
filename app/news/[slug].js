@@ -1,3 +1,4 @@
+// app/news/[slug].js
 import React, { useEffect, useState } from 'react';
 import {
   View,
@@ -9,7 +10,7 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter, useNavigation } from 'expo-router';  // ⬅ ADDED useNavigation
 import RenderHTML from 'react-native-render-html';
 import { authedFetch } from '../../src/api/client';
 
@@ -19,13 +20,22 @@ export default function ArticleScreen() {
   const [loading, setLoading] = useState(true);
   const { width } = Dimensions.get('window');
   const router = useRouter();
+  const navigation = useNavigation();   // ⬅ ADD THIS
 
   useEffect(() => {
     const fetchArticle = async () => {
       try {
         const res = await authedFetch(`/news/${slug}`);
         const data = await res.json();
-        if (data.success) setArticle(data.article);
+
+        if (data.success) {
+          setArticle(data.article);
+
+          // ⬅🔥 DYNAMIC TITLE UPDATE
+          navigation.setOptions({
+            title: data.article.title || "Article",
+          });
+        }
       } catch (err) {
         console.error('❌ Failed to load article:', err);
       } finally {
@@ -82,7 +92,7 @@ export default function ArticleScreen() {
           {/* Author */}
           {article.author_id && (
             <TouchableOpacity
-              onPress={() => router.push(`/profile/${article.author_id}`)}
+              onPress={() => router.push(`/user-profile?${article.author_id}`)}
               style={{
                 flexDirection: 'row',
                 alignItems: 'center',

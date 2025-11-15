@@ -1,8 +1,9 @@
 // app/index.js
+
 import React, { useEffect } from 'react';
-import { View, ActivityIndicator } from 'react-native';
-import { useAuthContext } from '../src/context/AuthContext';
+import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { router } from 'expo-router';
+import { useAuthContext } from '../src/context/AuthContext';
 
 export default function IndexScreen() {
   const { isLoading, user, accessToken } = useAuthContext();
@@ -10,25 +11,29 @@ export default function IndexScreen() {
   useEffect(() => {
     if (isLoading) return;
 
-    console.log('🏠 Index routing:', { 
-      hasUser: !!user, 
-      hasToken: !!accessToken,
-      userEmail: user?.email 
-    });
+    const authed = !!user && !!accessToken;
 
-    // Redirect based on auth status
-    if (user && accessToken) {
-      console.log('✅ User authenticated, redirecting to home');
+    if (authed) {
+      console.log('[Index] Authenticated, going to /home');
       router.replace('/home');
     } else {
-      console.log('❌ No user/token, redirecting to login');
+      console.log('[Index] No session, going to /login');
       router.replace('/login');
     }
   }, [isLoading, user, accessToken]);
 
   return (
-    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#000' }}>
-      <ActivityIndicator size="large" color="#fff" />
+    <View style={styles.container}>
+      <ActivityIndicator size="large" />
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#000',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+});

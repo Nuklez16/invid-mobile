@@ -56,6 +56,17 @@ export default function NotificationItem({ note }) {
         router.push(cleanTarget);
         return;
       }
+	  
+	  // 📩 Direct Messages — always navigate IN-APP
+if (
+  note.type === 'directmessage' ||
+  note.type === 'direct_message' ||
+  note.type === 'directMessage'
+) {
+  console.log('📲 Navigating to DM in-app:', cleanTarget);
+  router.push(cleanTarget);
+  return;
+}
 
       // 🌐 Others open web
       console.log('🌐 Opening in browser:', `https://invid.au${cleanTarget}`);

@@ -79,30 +79,32 @@ export default function getNotificationMetadata(notif) {
         text: `You've been invited to join ${data.team_name || 'a team'}`,
         target: `/user/manageteams`,
       };
+// ───────────────────────────────
+// Direct messages (MOBILE VERSION)
+// ───────────────────────────────
+case 'directmessage':
+case 'direct_message':
+case 'directMessage': {
+  const sender =
+    data.username ||
+    data.senderUsername ||
+    data.senderName ||
+    (typeof data.senderId !== 'undefined' ? `User #${data.senderId}` : 'Someone');
 
-    // ───────────────────────────────
-    // Direct messages
-    case 'directmessage':
-    case 'direct_message':
-    case 'directMessage': {
-      const sender =
-        data.username ||
-        data.senderUsername ||
-        data.senderName ||
-        (typeof data.senderId !== 'undefined' ? `User #${data.senderId}` : 'Someone');
+  const preview = data.messagePreview || data.preview || '';
+  const conversationId = data.conversationId || data.conversation_id;
 
-      const preview = data.messagePreview || data.preview || '';
-      const conversationId = data.conversationId || data.conversation_id;
+  return {
+    text: preview
+      ? `New message from ${sender}: ${preview}`
+      : `New message from ${sender}`,
 
-      return {
-        text: preview
-          ? `New message from ${sender}: ${preview}`
-          : `New message from ${sender}`,
-        target: conversationId
-          ? `/user/discussion/${conversationId}`
-          : `/messages`,
-      };
-    }
+    // ✅ MOBILE: route into the in-app conversation screen
+    target: conversationId
+      ? `/messages/${conversationId}`
+      : `/messages`,
+  };
+}
 
     // ───────────────────────────────
     // PUG ready reminder

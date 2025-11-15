@@ -1,4 +1,5 @@
 // src/context/AuthContext.js
+
 import React, {
   createContext,
   useEffect,
@@ -6,364 +7,460 @@ import React, {
   useCallback,
   useContext,
   useRef,
-} from "react";
-import { Alert, AppState } from "react-native";
+} from 'react';
+import { Alert, AppState } from 'react-native';
+import { router } from 'expo-router';
+
 import {
   saveSession,
   loadSession,
   clearSession,
   saveTokens,
-} from "../storage/authStorage";
+} from '../storage/authStorage';
+
 import {
   apiLogin,
   apiVerify2FA,
   apiRefresh,
   apiLogout,
-} from "../api/auth";
-import { router } from "expo-router";
+} from '../api/auth';
+
 import { getUserProfile } from '../api/user';
 
 export const AuthContext = createContext(null);
 
-// ⏰ JWT decoding helper
-function isTokenExpired(token, tokenType = "access") {
-  if (!token) {
-    console.log(`❌ ${tokenType} token: missing`);
-    return true;
-  }
+const SESSION_EXPIRED_MESSAGE =
+  'Your session expired. Please sign in again.';
+const RESTORE_SESSION_MESSAGE =
+  'We could not restore your session. Please sign in again.';
 
-  try {
-    const base64Url = token.split(".")[1];
-    if (!base64Url) {
-      console.warn(`⚠️ Invalid ${tokenType} token format`);
-      return true;
+/**
+ * Minimal base64 decoder that works in React Native without extra deps.
+ */
+function base64Decode(str) {
+  const chars =
+    'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
+  let output = '';
+  let buffer = 0;
+  let bits = 0;
+
+  for (let i = 0; i < str.length; i++) {
+    const val = chars.indexOf(str[i]);
+    if (val < 0) continue;
+    buffer = (buffer << 6) | val;
+    bits += 6;
+    if (bits >= 8) {
+      bits -= 8;
+      output += String.fromCharCode((buffer >> bits) & 0xff);
     }
+  }
+  return output;
+}
 
-    const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
-    const padded = base64.padEnd(
-      base64.length + ((4 - (base64.length % 4)) % 4),
-      "="
+/**
+ * Safely decode JWT payload. Returns null on failure.
+ */
+function decodeJwtPayload(token) {
+  try {
+    const parts = token.split('.');
+    if (parts.length < 2) return null;
+
+    const base64Url = parts[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const padded =
+      base64 + '='.repeat((4 - (base64.length % 4 || 4)) % 4);
+
+    const binary = typeof global.atob === 'function'
+      ? global.atob(padded)
+      : base64Decode(padded);
+
+    const json = decodeURIComponent(
+      binary
+        .split('')
+        .map(
+          (c) =>
+            '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2),
+        )
+        .join(''),
     );
-    const decoded = JSON.parse(atob(padded));
 
-    const expiresAt = decoded.exp * 1000;
-    const now = Date.now();
-    const isExpired = expiresAt < now + 30000; // 30 sec buffer
+    return JSON.parse(json);
+  } catch (e) {
+    console.warn('Failed to decode JWT payload:', e?.message || e);
+    return null;
+  }
+}
 
-    console.log(`🔍 ${tokenType} token check:`, {
-      expiresAt: new Date(expiresAt).toISOString(),
-      now: new Date(now).toISOString(),
-      isExpired,
-      timeUntilExpiry: Math.round((expiresAt - now) / 1000 / 60) + " minutes",
-    });
-
-    return isExpired;
-  } catch (err) {
-    console.warn(`⚠️ Failed to decode ${tokenType} token:`, err);
+/**
+ * Expiry helper. IMPORTANT:
+ * - If token missing → expired.
+ * - If decode fails → treat as NOT expired so we don’t
+ *   accidentally log the user out; backend will enforce.
+ */
+function isTokenExpired(token, tokenType = 'access') {
+  if (!token) {
+    console.log(`❌ ${tokenType} token missing`);
     return true;
   }
+
+  const payload = decodeJwtPayload(token);
+  if (!payload || !payload.exp) {
+    console.log(
+      `⚠️ ${tokenType} token has no readable exp; letting backend decide.`,
+    );
+    return false;
+  }
+
+  const expiresAt = payload.exp * 1000;
+  const now = Date.now();
+  const isExpired = expiresAt < now + 30000; // 30s buffer
+
+  console.log(`${tokenType} token check`, {
+    expiresAt: new Date(expiresAt).toISOString(),
+    now: new Date(now).toISOString(),
+    isExpired,
+  });
+
+  return isExpired;
 }
 
 export function AuthProvider({ children }) {
   const [isLoading, setIsLoading] = useState(true);
+
   const [user, setUser] = useState(null);
   const [userProfile, setUserProfile] = useState(null);
-  const [accessToken, setAccessToken] = useState("");
-  const [refreshToken, setRefreshToken] = useState("");
+
+  const [accessToken, setAccessToken] = useState(null);
+  const [refreshToken, setRefreshToken] = useState(null);
+
   const [pushToken, setPushToken] = useState(null);
+
   const appState = useRef(AppState.currentState);
 
+  // Load user profile
+  const loadUserProfile = useCallback(
+    async (token = accessToken) => {
+      if (!token) return;
+      try {
+        console.log('[Auth] Loading user profile…');
+        const profile = await getUserProfile(token);
+        setUserProfile(profile);
+        console.log('[Auth] User profile loaded');
+      } catch (err) {
+        console.warn('[Auth] Failed to load user profile:', err);
+      }
+    },
+    [accessToken],
+  );
 
-
-  const SESSION_EXPIRED_MESSAGE = "Your session expired. Please sign in again.";
-  const RESTORE_SESSION_MESSAGE = "We couldn't restore your session. Please sign in again.";
-
-  // Add this function to load user profile
-  const loadUserProfile = useCallback(async () => {
-    if (!accessToken) return;
-    
-    try {
-      console.log('🔄 Loading user profile...');
-      const profile = await getUserProfile(accessToken);
-      setUserProfile(profile);
-      console.log('✅ User profile loaded:', profile);
-    } catch (error) {
-      console.error('❌ Failed to load user profile:', error);
-      // Don't throw here, just log the error
-    }
-  }, [accessToken]);
-
-  // Call loadUserProfile when accessToken changes
-  useEffect(() => {
-    if (accessToken && !isLoading) {
-      loadUserProfile();
-    }
-  }, [accessToken, isLoading, loadUserProfile]);
-
-  // 🚪 Logout - Fixed: Removed duplicate definition
-  const handleLogout = useCallback(
-    async (options) => {
-      const normalized =
-        typeof options === "string" ? { reason: options } : options || {};
-      const { reason, silent } = normalized;
-
+  // Logout
+  const logout = useCallback(
+    async ({ reason, silent } = {}) => {
       try {
         if (refreshToken) {
           await apiLogout();
         }
-      } catch (_) {
-        console.warn("Logout API call failed, clearing local session anyway");
+      } catch (err) {
+        console.warn(
+          '[Auth] Logout API failed, clearing local session anyway',
+        );
       }
+
       await clearSession();
       setUser(null);
       setUserProfile(null);
-      setAccessToken("");
-      setRefreshToken("");
+      setAccessToken(null);
+      setRefreshToken(null);
       setPushToken(null);
+
       if (reason && !silent) {
-        Alert.alert("Signed out", reason);
+        Alert.alert('Signed out', reason);
       }
-      router.replace("/login");
+
+      router.replace('/login');
     },
-    [refreshToken]
+    [refreshToken],
   );
 
-  // 🔁 Refresh token logic
- const handleRefresh = useCallback(async () => {
-    const activeRefreshToken = refreshToken;
+  // Refresh tokens
+  const refreshAccessToken = useCallback(async () => {
+    const currentRefresh = refreshToken;
 
-    if (!activeRefreshToken) {
-      console.warn("❌ Refresh requested without a refresh token");
-      await handleLogout({ reason: SESSION_EXPIRED_MESSAGE });
-      throw new Error("Missing refresh token");
+    if (!currentRefresh) {
+      console.warn('[Auth] Refresh requested without refresh token');
+      await logout({ reason: SESSION_EXPIRED_MESSAGE });
+      throw new Error('Missing refresh token');
     }
 
     try {
-      const newTokens = await apiRefresh({ refreshToken: activeRefreshToken });
-      const nextRefreshToken = newTokens.refreshToken || activeRefreshToken;
+      console.log('[Auth] Attempting token refresh…');
+      const data = await apiRefresh({ refreshToken: currentRefresh });
 
-      setAccessToken(newTokens.accessToken);
-      setRefreshToken(nextRefreshToken);
+      if (!data?.accessToken) {
+        throw new Error('No access token in refresh response');
+      }
+
+      const nextRefresh = data.refreshToken || currentRefresh;
+
+      setAccessToken(data.accessToken);
+      setRefreshToken(nextRefresh);
 
       await saveTokens({
-        accessToken: newTokens.accessToken,
-        refreshToken: newTokens.refreshToken,
-        fallbackRefreshToken: activeRefreshToken,
+        accessToken: data.accessToken,
+        refreshToken: data.refreshToken,
+        fallbackRefreshToken: currentRefresh,
       });
 
-      return newTokens.accessToken;
+      console.log('[Auth] Token refresh successful');
+      return data.accessToken;
     } catch (err) {
-      console.warn("❌ Refresh failed", err);
-      await handleLogout({ reason: SESSION_EXPIRED_MESSAGE });
+      console.warn('[Auth] Token refresh failed:', err?.message || err);
+      await logout({ reason: SESSION_EXPIRED_MESSAGE });
       throw err;
     }
-  }, [refreshToken, handleLogout]);
-  // 🔓 Load session on boot - Fixed: Removed duplicate logout calls and cleaned up logic
+  }, [refreshToken, logout]);
+
+  // Initial session restore
   useEffect(() => {
     let isMounted = true;
 
     (async () => {
       try {
-        console.log("🔄 Checking existing session...");
+        console.log('[Auth] Checking existing session…');
         const sess = await loadSession();
-
         if (!isMounted) return;
 
-        if (!sess || !sess.accessToken || !sess.refreshToken) {
-          console.log("❌ No valid session found - missing tokens");
+        if (!sess?.accessToken || !sess?.refreshToken) {
+          console.log('[Auth] No saved session');
           setIsLoading(false);
           return;
         }
 
-        console.log("📦 Session loaded:", {
-          hasUser: !!sess.user,
-          accessTokenLength: sess.accessToken?.length,
-          refreshTokenLength: sess.refreshToken?.length,
-        });
-
-        setUser(sess.user);
+        console.log('[Auth] Session loaded from storage');
+        setUser(sess.user || null);
         setRefreshToken(sess.refreshToken);
 
-        let accessExpired = true;
-        let refreshExpired = true;
-
-        try {
-          accessExpired = isTokenExpired(sess.accessToken, "access");
-          refreshExpired = isTokenExpired(sess.refreshToken, "refresh");
-        } catch (error) {
-          console.warn("❌ Error checking token expiry:", error);
-          accessExpired = true;
-          refreshExpired = true;
-        }
+        const accessExpired = isTokenExpired(
+          sess.accessToken,
+          'access',
+        );
+        const refreshExpired = isTokenExpired(
+          sess.refreshToken,
+          'refresh',
+        );
 
         if (!accessExpired) {
-          console.log("✅ Access token valid, setting immediately");
           setAccessToken(sess.accessToken);
+          await loadUserProfile(sess.accessToken);
           setIsLoading(false);
           return;
         }
 
-        console.log("🔄 Access token expired, checking refresh token...");
         if (refreshExpired) {
-          console.warn("❌ Refresh token expired, logging out");
-          if (isMounted)
-            await handleLogout({ reason: SESSION_EXPIRED_MESSAGE });
+          console.log(
+            '[Auth] Stored refresh token expired, logging out',
+          );
+          await logout({
+            reason: SESSION_EXPIRED_MESSAGE,
+            silent: true,
+          });
+          setIsLoading(false);
           return;
         }
 
-        console.log("🔄 Attempting token refresh...");
+        // Try refresh with stored refresh token
         try {
-          const newTokens = await apiRefresh({
+          const data = await apiRefresh({
             refreshToken: sess.refreshToken,
           });
 
           if (!isMounted) return;
 
-          if (newTokens.accessToken) {
-            console.log("🎉 Token refresh successful");
-            setAccessToken(newTokens.accessToken);
-            setRefreshToken(newTokens.refreshToken || sess.refreshToken);
-            await saveTokens({
-              accessToken: newTokens.accessToken,
-              refreshToken: newTokens.refreshToken,
-              fallbackRefreshToken: sess.refreshToken,
-            });
-          } else {
-            throw new Error("No access token in refresh response");
+          if (!data?.accessToken) {
+            throw new Error('No access token in refresh response');
           }
+
+          const nextRefresh =
+            data.refreshToken || sess.refreshToken;
+
+          setAccessToken(data.accessToken);
+          setRefreshToken(nextRefresh);
+
+          await saveTokens({
+            accessToken: data.accessToken,
+            refreshToken: data.refreshToken,
+            fallbackRefreshToken: sess.refreshToken,
+          });
+
+          await loadUserProfile(data.accessToken);
         } catch (err) {
-          console.warn("❌ Token refresh failed:", err.message);
+          console.warn(
+            '[Auth] Refresh during restore failed:',
+            err?.message || err,
+          );
           if (isMounted) {
-            await handleLogout({ reason: SESSION_EXPIRED_MESSAGE });
+            await logout({
+              reason: SESSION_EXPIRED_MESSAGE,
+              silent: true,
+            });
           }
         }
-      } catch (error) {
-        console.warn("❌ Error loading session:", error);
-        if (isMounted)
-          await handleLogout({ reason: RESTORE_SESSION_MESSAGE });
+      } catch (err) {
+        console.warn(
+          '[Auth] Error restoring session:',
+          err?.message || err,
+        );
+        if (isMounted) {
+          await logout({
+            reason: RESTORE_SESSION_MESSAGE,
+            silent: true,
+          });
+        }
       } finally {
-        if (isMounted) setIsLoading(false);
+        if (isMounted) {
+          setIsLoading(false);
+        }
       }
     })();
 
     return () => {
       isMounted = false;
     };
-   }, [handleLogout]);
+  }, [loadUserProfile, logout]);
 
+  // Foreground refresh on app resume
   useEffect(() => {
     if (isLoading) return;
 
-    const subscription = AppState.addEventListener("change", (nextAppState) => {
-      const previousState = appState.current;
-      appState.current = nextAppState;
+    const subscription = AppState.addEventListener(
+      'change',
+      (nextState) => {
+        const prev = appState.current;
+        appState.current = nextState;
 
-      if (
-        previousState?.match(/inactive|background/) &&
-        nextAppState === "active" &&
-        refreshToken
-      ) {
-        const accessNeedsRefresh =
-          !accessToken || isTokenExpired(accessToken, "access");
+        if (
+          prev?.match(/inactive|background/) &&
+          nextState === 'active' &&
+          refreshToken
+        ) {
+          const needsRefresh =
+            !accessToken || isTokenExpired(accessToken, 'access');
 
-        if (accessNeedsRefresh) {
-          handleRefresh().catch((err) =>
-            console.warn("❌ Failed to refresh on foreground:", err?.message || err)
-          );
+          if (needsRefresh) {
+            refreshAccessToken().catch((err) =>
+              console.warn(
+                '[Auth] Failed to refresh on foreground:',
+                err?.message || err,
+              ),
+            );
+          }
         }
-      }
-    });
+      },
+    );
 
     return () => {
       subscription?.remove?.();
     };
-  }, [accessToken, refreshToken, handleRefresh, isLoading]);
-  
-   // 📱 Initialize push token after auth is loaded and we have access token
+  }, [
+    isLoading,
+    accessToken,
+    refreshToken,
+    refreshAccessToken,
+  ]);
 
+  // Initialize push token once authenticated
   useEffect(() => {
-
     if (!accessToken || isLoading) return;
 
-
-
     (async () => {
-
       try {
-
-        console.log('📱 Initializing push token system...');
-
-        
-
-        // Dynamically import the push token service to avoid circular deps
-
-        const { initializePushToken } = await import('../services/pushTokenService');
-
+        const { initializePushToken } = await import(
+          '../services/pushTokenService'
+        );
         const token = await initializePushToken(accessToken);
-
         setPushToken(token);
-
-        
-
-      } catch (error) {
-
-        console.warn('📱 Push token initialization failed:', error);
-
+      } catch (err) {
+        console.warn(
+          '[Auth] Push token initialization failed:',
+          err?.message || err,
+        );
       }
-
     })();
-
   }, [accessToken, isLoading]);
 
+  // Login (supports 2FA flow)
+  const login = useCallback(
+    async ({ username, password, code, ticket }) => {
+      let resp;
 
-  // 🔑 Login / 2FA
-  const handleLogin = useCallback(async ({ username, password, code, ticket }) => {
-    let resp;
-    try {
-      if (ticket && code) {
-        resp = await apiVerify2FA({ ticket, code });
-      } else {
-        resp = await apiLogin({ username, password });
-        if (resp.status === "TWOFA_REQUIRED") return resp;
+      try {
+        if (ticket && code) {
+          resp = await apiVerify2FA({ ticket, code });
+        } else {
+          resp = await apiLogin({ username, password });
+
+          if (resp?.status === 'TWOFA_REQUIRED') {
+            // Caller should handle 2FA step
+            return resp;
+          }
+        }
+      } catch (err) {
+        console.error('[Auth] Login error:', err);
+        throw new Error(err?.message || 'Login failed');
       }
-    } catch (err) {
-      console.error("[AuthContext] login error", err);
-      throw new Error(err?.message || "Login failed");
-    }
 
-    const { accessToken: a, refreshToken: r, user: u } = resp;
-    setUser(u);
-    setAccessToken(a);
-    setRefreshToken(r);
-    await saveSession({ accessToken: a, refreshToken: r, user: u });
-    return { ok: true };
-  }, []);
+      const { accessToken: a, refreshToken: r, user: u } = resp || {};
+
+      if (!a || !r || !u) {
+        throw new Error('Invalid login response from server');
+      }
+
+      setUser(u);
+      setAccessToken(a);
+      setRefreshToken(r);
+
+      await saveSession({
+        accessToken: a,
+        refreshToken: r,
+        user: u,
+      });
+
+      await loadUserProfile(a);
+
+      return { ok: true };
+    },
+    [loadUserProfile],
+  );
+
+  const value = {
+    isLoading,
+    user,
+    userProfile,
+    accessToken,
+    refreshToken,
+    pushToken,
+    login,
+    logout,
+    refreshAccessToken,
+    loadUserProfile,
+    setUser,
+    setUserProfile,
+  };
 
   return (
-    <AuthContext.Provider
-      value={{
-        isLoading,
-        user,
-        userProfile,
-        accessToken,
-        refreshToken,
-        pushToken,
-        login: handleLogin,
-        logout: handleLogout,
-        refreshAccessToken: handleRefresh,
-        loadUserProfile,
-      }}
-    >
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );
 }
 
-// 🔁 Hook
+// Hook
 export function useAuthContext() {
   const ctx = useContext(AuthContext);
   if (!ctx) {
-    throw new Error("useAuthContext must be used within an <AuthProvider>");
+    throw new Error(
+      'useAuthContext must be used within an AuthProvider',
+    );
   }
   return ctx;
 }
