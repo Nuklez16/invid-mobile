@@ -1,15 +1,30 @@
 // src/api/auth.js
 import { rawFetch } from './raw';
+import { performTokenRefresh } from './refreshToken';
 
-import { apiUrl } from '../config/api';
+// Small helper to safely parse JSON and surface server errors
+async function parseJsonSafe(res) {
+  try {
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
 
 export async function apiLogin({ username, password }) {
   const res = await rawFetch('/auth/login', {
     method: 'POST',
     body: { username, password },
   });
-  if (!res.ok) throw new Error('login failed');
-  return res.json();
+
+  const data = await parseJsonSafe(res);
+
+  if (!res.ok) {
+    const msg = data?.error || data?.message || 'login failed';
+    throw new Error(msg);
+  }
+
+  return data;
 }
 
 export async function apiVerify2FA({ ticket, code }) {
@@ -17,29 +32,53 @@ export async function apiVerify2FA({ ticket, code }) {
     method: 'POST',
     body: { ticket, code },
   });
-  if (!res.ok) throw new Error('2FA failed');
-  return res.json();
+
+  const data = await parseJsonSafe(res);
+
+  if (!res.ok) {
+    const msg = data?.error || data?.message || '2FA failed';
+    throw new Error(msg);
+  }
+
+  return data;
 }
 
 export async function apiLogout() {
+  // No body – keeps it simple and avoids any CSRF/body parsing weirdness
   const res = await rawFetch('/auth/logout', {
-  method: 'POST',
-  body: {}, // logout endpoint usually requires empty body
-});
-  if (!res.ok) throw new Error('logout failed');
+    method: 'POST',
+  });
+
+  if (!res.ok) {
+    throw new Error('logout failed');
+  }
+
   return true;
 }
 
+/**
+ * Register Expo push token for the authenticated user.
+ * Uses rawFetch for consistent base URL handling.
+ */
 export async function apiRegisterPushToken(accessToken, expoPushToken) {
-  const res = await fetch(apiUrl('/push/register'), {
+  const res = await rawFetch('/push/register', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {})
-    },
-    body: JSON.stringify({ expoPushToken }),
+    body: { expoPushToken },
+    headers: accessToken
+      ? { Authorization: `Bearer ${accessToken}` }
+      : {},
   });
 
-  if (!res.ok) throw new Error('push register failed');
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(
+      text || 'push register failed',
+    );
+  }
+
   return true;
+}
+
+export async function apiRefresh({ refreshToken }) {
+  return performTokenRefresh(refreshToken);
 }

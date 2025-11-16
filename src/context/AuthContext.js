@@ -183,42 +183,53 @@ export function AuthProvider({ children }) {
   );
 
   // Refresh tokens
-  const refreshAccessToken = useCallback(async () => {
-    const currentRefresh = refreshToken;
+  const refreshAccessToken = useCallback(
+    async () => {
+      const currentRefresh = refreshToken;
 
-    if (!currentRefresh) {
-      console.warn('[Auth] Refresh requested without refresh token');
-      await logout({ reason: SESSION_EXPIRED_MESSAGE });
-      throw new Error('Missing refresh token');
-    }
-
-    try {
-      console.log('[Auth] Attempting token refresh…');
-      const data = await apiRefresh({ refreshToken: currentRefresh });
-
-      if (!data?.accessToken) {
-        throw new Error('No access token in refresh response');
+      if (!currentRefresh) {
+        console.warn('[Auth] Refresh requested without refresh token');
+        await logout({ reason: SESSION_EXPIRED_MESSAGE });
+        throw new Error('Missing refresh token');
       }
 
-      const nextRefresh = data.refreshToken || currentRefresh;
+      try {
+        console.log('[Auth] Attempting token refresh…');
+        const data = await apiRefresh({ refreshToken: currentRefresh });
 
-      setAccessToken(data.accessToken);
-      setRefreshToken(nextRefresh);
+        if (!data?.accessToken) {
+          throw new Error('No access token in refresh response');
+        }
 
-      await saveTokens({
-        accessToken: data.accessToken,
-        refreshToken: data.refreshToken,
-        fallbackRefreshToken: currentRefresh,
-      });
+        const nextRefresh = data.refreshToken || currentRefresh;
 
-      console.log('[Auth] Token refresh successful');
-      return data.accessToken;
-    } catch (err) {
-      console.warn('[Auth] Token refresh failed:', err?.message || err);
-      await logout({ reason: SESSION_EXPIRED_MESSAGE });
-      throw err;
-    }
-  }, [refreshToken, logout]);
+        setAccessToken(data.accessToken);
+        setRefreshToken(nextRefresh);
+
+        // Persist latest tokens for next app launch
+        await saveSession({
+          accessToken: data.accessToken,
+          refreshToken: nextRefresh,
+          user,
+        });
+
+        // Optional: keep any token-only store up to date
+        await saveTokens({
+          accessToken: data.accessToken,
+          refreshToken: data.refreshToken,
+          fallbackRefreshToken: currentRefresh,
+        });
+
+        console.log('[Auth] Token refresh successful');
+        return data.accessToken;
+      } catch (err) {
+        console.warn('[Auth] Token refresh failed:', err?.message || err);
+        await logout({ reason: SESSION_EXPIRED_MESSAGE });
+        throw err;
+      }
+    },
+    [refreshToken, logout, user],
+  );
 
   // Initial session restore
   useEffect(() => {
@@ -285,6 +296,13 @@ export function AuthProvider({ children }) {
 
           setAccessToken(data.accessToken);
           setRefreshToken(nextRefresh);
+
+          // Persist refreshed session so it survives app restart
+          await saveSession({
+            accessToken: data.accessToken,
+            refreshToken: nextRefresh,
+            user: sess.user || null,
+          });
 
           await saveTokens({
             accessToken: data.accessToken,

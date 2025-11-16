@@ -17,7 +17,13 @@ export async function performTokenRefresh(refreshToken) {
     throw new Error(`Refresh failed: ${res.status}`);
   }
 
-  const data = await res.json();
+  const data = await res.json().catch(() => null);
+
+  if (!data || !data.accessToken) {
+    console.warn('❌ Refresh response missing accessToken');
+    throw new Error('Refresh response invalid');
+  }
+
   console.log('✅ Refresh successful');
   return data;
 }

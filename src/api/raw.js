@@ -6,7 +6,18 @@ export function buildUrl(path) {
   return apiUrl(p);
 }
 
-export async function rawFetch(path, { method = 'POST', body, headers = {} } = {}) {
+/**
+ * Lightweight wrapper around fetch that:
+ * - Builds full API URL from a relative path
+ * - JSON.stringifys the body if provided
+ * - Sets JSON Content-Type by default
+ *
+ * You can override/extend headers via the headers option.
+ */
+export async function rawFetch(
+  path,
+  { method = 'POST', body, headers = {} } = {},
+) {
   const endpoint = buildUrl(path);
 
   return fetch(endpoint, {
@@ -15,6 +26,6 @@ export async function rawFetch(path, { method = 'POST', body, headers = {} } = {
       'Content-Type': 'application/json',
       ...headers,
     },
-    body: body ? JSON.stringify(body) : undefined,
+    body: body != null ? JSON.stringify(body) : undefined,
   });
 }
