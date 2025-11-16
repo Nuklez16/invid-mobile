@@ -219,7 +219,11 @@ const onRefresh = async () => {
             <Text style={styles.reputationValue}>{`${formattedReputation} rep`}</Text>
           </View>
 
-          {!isProfileLoaded && <Text style={styles.loadingHint}>Hang tight, we're fetching your stats…</Text>}
+          {!isProfileLoaded && (
+            <Text style={styles.loadingHint}>
+              Hang tight, we’re fetching your stats…
+            </Text>
+          )}
         </View>
       </TouchableOpacity>
 
