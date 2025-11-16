@@ -28,10 +28,20 @@ export function subscribeToTokenChanges(listener) {
 }
 
 export async function saveSession({ accessToken, refreshToken, user }) {
+  let serializedUser = 'null';
+
+  if (user != null) {
+    try {
+      serializedUser = JSON.stringify(user);
+    } catch (err) {
+      console.warn('Failed to serialize user for session storage', err);
+    }
+  }
+
   await AsyncStorage.multiSet([
     [KEYS.ACCESS, accessToken || ''],
     [KEYS.REFRESH, refreshToken || ''],
-    [KEYS.USER, JSON.stringify(user || {})],
+    [KEYS.USER, serializedUser],
   ]);
 
   notifyTokenListeners({
@@ -44,10 +54,25 @@ export async function loadSession() {
   const [[, accessToken], [, refreshToken], [, rawUser]] =
     await AsyncStorage.multiGet([KEYS.ACCESS, KEYS.REFRESH, KEYS.USER]);
 
+  let parsedUser = null;
+
+  if (rawUser && rawUser !== 'null') {
+    try {
+      parsedUser = JSON.parse(rawUser);
+    } catch (err) {
+      console.warn('Failed to parse stored user session, clearing it', err);
+      try {
+        await AsyncStorage.removeItem(KEYS.USER);
+      } catch (removeErr) {
+        console.warn('Failed to clear corrupted user session', removeErr);
+      }
+    }
+  }
+
   return {
     accessToken: accessToken || '',
     refreshToken: refreshToken || '',
-    user: rawUser ? JSON.parse(rawUser) : null,
+    user: parsedUser,
   };
 }
 
