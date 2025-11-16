@@ -7,12 +7,37 @@ const KEYS = {
   USER: 'user',
 };
 
+const tokenListeners = new Set();
+
+function notifyTokenListeners(update = {}) {
+  tokenListeners.forEach((listener) => {
+    try {
+      listener(update);
+    } catch (err) {
+      console.warn('Token listener failed', err);
+    }
+  });
+}
+
+export function subscribeToTokenChanges(listener) {
+  if (typeof listener !== 'function') {
+    return () => {};
+  }
+  tokenListeners.add(listener);
+  return () => tokenListeners.delete(listener);
+}
+
 export async function saveSession({ accessToken, refreshToken, user }) {
   await AsyncStorage.multiSet([
     [KEYS.ACCESS, accessToken || ''],
     [KEYS.REFRESH, refreshToken || ''],
     [KEYS.USER, JSON.stringify(user || {})],
   ]);
+
+  notifyTokenListeners({
+    accessToken: accessToken ?? null,
+    refreshToken: refreshToken ?? null,
+  });
 }
 
 export async function loadSession() {
@@ -28,6 +53,7 @@ export async function loadSession() {
 
 export async function clearSession() {
   await AsyncStorage.multiRemove([KEYS.ACCESS, KEYS.REFRESH, KEYS.USER]);
+  notifyTokenListeners({ accessToken: null, refreshToken: null });
 }
 
 export async function saveTokens({
@@ -49,6 +75,18 @@ export async function saveTokens({
 
   if (tasks.length) {
     await Promise.all(tasks);
+  }
+
+  const nextUpdate = {};
+  if (accessToken !== undefined) {
+    nextUpdate.accessToken = accessToken || null;
+  }
+  if (resolvedRefreshToken !== undefined) {
+    nextUpdate.refreshToken = resolvedRefreshToken || null;
+  }
+
+  if (Object.keys(nextUpdate).length) {
+    notifyTokenListeners(nextUpdate);
   }
 }
 

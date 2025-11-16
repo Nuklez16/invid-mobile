@@ -16,6 +16,7 @@ import {
   loadSession,
   clearSession,
   saveTokens,
+  subscribeToTokenChanges,
 } from '../storage/authStorage';
 
 import {
@@ -136,6 +137,20 @@ export function AuthProvider({ children }) {
   const [pushToken, setPushToken] = useState(null);
 
   const appState = useRef(AppState.currentState);
+
+  // Keep in-memory tokens synced with storage updates (e.g. authedFetch refreshes)
+  useEffect(() => {
+    const unsubscribe = subscribeToTokenChanges((update) => {
+      if (update && Object.prototype.hasOwnProperty.call(update, 'accessToken')) {
+        setAccessToken(update.accessToken);
+      }
+      if (update && Object.prototype.hasOwnProperty.call(update, 'refreshToken')) {
+        setRefreshToken(update.refreshToken);
+      }
+    });
+
+    return unsubscribe;
+  }, []);
 
   // Load user profile
   const loadUserProfile = useCallback(
