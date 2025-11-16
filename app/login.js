@@ -128,7 +128,7 @@ export default function LoginScreen() {
           <View style={styles.header}>
             <Text style={styles.title}>Login to your Invidious Account</Text>
             <Text style={styles.subtitle}>
-              Don't have an account?{' '}
+              Don’t have an account?{' '}
               <Text
                 style={styles.link}
                 onPress={() => router.push('/register')}
