@@ -6,6 +6,10 @@ export default StyleSheet.create({
     backgroundColor: "#0d0d0d",
   },
 
+  listContent: {
+    paddingBottom: 12,
+  },
+
   center: {
     flex: 1,
     justifyContent: "center",
@@ -41,6 +45,7 @@ export default StyleSheet.create({
   textContainer: {
     flex: 1,
     marginLeft: 12,
+    minWidth: 0,
   },
 
   headerRow: {
@@ -51,8 +56,9 @@ export default StyleSheet.create({
   },
 
   headerRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    marginLeft: 8,
   },
 
   username: {

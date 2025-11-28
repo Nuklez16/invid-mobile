@@ -144,7 +144,21 @@ export default StyleSheet.create({
     width: 200,
     height: 200,
   },
-  
+
+  filePlaceholder: {
+    backgroundColor: '#1f1f1f',
+    borderWidth: 1,
+    borderColor: '#2a2a2a',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  filePlaceholderText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+
   videoOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: "rgba(0,0,0,0.3)",
