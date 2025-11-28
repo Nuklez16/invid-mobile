@@ -4,6 +4,7 @@ import React from 'react';
 import { Stack } from 'expo-router';
 import RootProvider from './RootProvider';
 import HamburgerMenu from '../src/components/HamburgerMenu';
+import NotificationNavigationHandler from '../src/components/NotificationNavigationHandler';
 import { useAuthContext } from '../src/context/AuthContext';
 import 'react-native-reanimated';
 
@@ -75,6 +76,7 @@ function AppStack() {
 export default function RootLayout() {
   return (
     <RootProvider>
+      <NotificationNavigationHandler />
       <AppStack />
     </RootProvider>
   );
