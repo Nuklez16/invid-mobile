@@ -31,6 +31,7 @@ import {
 import { useAuthContext } from "../../src/context/AuthContext";
 import { authedFetch } from "../../src/api/client";
 import SecureAvatar from "../../src/components/SecureAvatar";
+import { API_BASE } from "../../src/config/api";
 
 import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
@@ -139,24 +140,38 @@ export default function ConversationScreen() {
     return "file";
   };
 
-  const normalizeMedia = (media = [], mediaUrls = []) => {
+  const normalizeUrl = (url) => {
+    if (!url) return null;
+    if (url.startsWith("http")) return url;
+    if (url.startsWith("//")) return `https:${url}`;
+    if (url.startsWith("data:")) return url;
+
+    const sanitized = url.startsWith("/") ? url : `/${url}`;
+    return `${API_BASE}${sanitized}`;
+  };
+
+  const extractMediaUrl = (item) =>
+    item?.url || item?.uri || item?.path || item?.location || item?.mediaUrl;
+
+  const normalizeMedia = useCallback((media = [], mediaUrls = []) => {
     if (Array.isArray(media) && media.length > 0) {
       return media
         .map((item) => {
           if (!item) return null;
 
-          if (typeof item === "string") {
-            return {
-              url: item,
-              type: buildMediaTypeFromUrl(item),
-            };
-          }
+          const rawUrl =
+            typeof item === "string" ? item : extractMediaUrl(item);
+          const normalizedUrl = normalizeUrl(rawUrl);
 
-          const derivedType = item.type || buildMediaTypeFromUrl(item.url);
+          if (!normalizedUrl) return null;
+
+          const derivedType =
+            item.type ||
+            buildMediaTypeFromMime(item.mimeType, buildMediaTypeFromUrl(rawUrl));
 
           return {
             ...item,
-            url: item.url,
+            url: normalizedUrl,
             type: derivedType,
           };
         })
@@ -165,31 +180,37 @@ export default function ConversationScreen() {
 
     if (Array.isArray(mediaUrls) && mediaUrls.length > 0) {
       return mediaUrls
-        .map((url) =>
-          url
-            ? {
-                url,
-                type: buildMediaTypeFromUrl(url),
-              }
-            : null
-        )
+        .map((item) => {
+          const rawUrl = typeof item === "string" ? item : extractMediaUrl(item);
+          const normalizedUrl = normalizeUrl(rawUrl);
+
+          if (!normalizedUrl) return null;
+
+          return {
+            url: normalizedUrl,
+            type: buildMediaTypeFromUrl(rawUrl),
+          };
+        })
         .filter(Boolean);
     }
 
     return [];
-  };
+  }, []);
 
-  const normalizeMessage = (message) => {
-    if (!message) return message;
+  const normalizeMessage = useCallback(
+    (message) => {
+      if (!message) return message;
 
-    const media = normalizeMedia(message.media, message.mediaUrls);
+      const media = normalizeMedia(message.media, message.mediaUrls);
 
-    return {
-      ...message,
-      media,
-      mediaUrls: media.map((m) => m.url),
-    };
-  };
+      return {
+        ...message,
+        media,
+        mediaUrls: media.map((m) => m.url),
+      };
+    },
+    [normalizeMedia]
+  );
 
   const openVideo = (url) => {
     if (!url) return;
@@ -247,7 +268,7 @@ export default function ConversationScreen() {
         setLoadingMore(false);
       }
     },
-    [conversationId, navigation]
+    [conversationId, navigation, normalizeMessage]
   );
 
   useEffect(() => {
@@ -338,17 +359,18 @@ export default function ConversationScreen() {
     try {
       console.log("Adding attachment from URI:", uri);
       const url = await uploadToServer(uri, typeHint, originalAsset);
+      const normalizedUrl = normalizeUrl(url);
       const type =
         buildMediaTypeFromMime(originalAsset?.mimeType, typeHint) ||
         buildMediaTypeFromUrl(url);
 
-      console.log("Attachment added successfully:", { url, type });
+      console.log("Attachment added successfully:", { url, normalizedUrl, type });
 
       setAttachments((prev) => [
         ...prev,
         {
           id: `local-${Date.now()}-${Math.random()}`,
-          url,
+          url: normalizedUrl || url,
           type,
         },
       ]);
@@ -698,6 +720,13 @@ export default function ConversationScreen() {
     return (
       <View style={styles.mediaGrid}>
         {item.media.map((m, idx) => {
+          const mediaUri =
+            m.url || m.uri || m.path || m.location || m.mediaUrl;
+          const normalizedUri = normalizeUrl(mediaUri);
+          const sourceUri = normalizedUri || mediaUri;
+
+          if (!sourceUri) return null;
+
           const isSingle = total === 1;
 
           if (m.type === "video") {
@@ -708,11 +737,11 @@ export default function ConversationScreen() {
                   styles.mediaItem,
                   isSingle && styles.mediaItemSingle,
                 ]}
-                onPress={() => openVideo(m.url)}
+                onPress={() => openVideo(sourceUri)}
                 activeOpacity={0.7}
               >
                 <Image
-                  source={{ uri: m.url }}
+                  source={{ uri: sourceUri }}
                   style={[styles.mediaItem, isSingle && styles.mediaItemSingle]}
                   resizeMode="cover"
                 />
@@ -727,7 +756,7 @@ export default function ConversationScreen() {
             return (
               <Image
                 key={idx}
-                source={{ uri: m.url }}
+                source={{ uri: sourceUri }}
                 style={[
                   styles.mediaItem,
                   isSingle && styles.mediaItemSingle,
@@ -846,12 +875,13 @@ export default function ConversationScreen() {
               renderItem={({ item }) => {
                 const isImage = item.type === "image";
                 const isVideo = item.type === "video";
+                const thumbUri = normalizeUrl(item.url) || item.url;
 
                 return (
                   <View style={styles.attachmentThumbWrapper}>
                     {isImage ? (
                       <Image
-                        source={{ uri: item.url }}
+                        source={{ uri: thumbUri }}
                         style={styles.attachmentThumb}
                         resizeMode="cover"
                       />
