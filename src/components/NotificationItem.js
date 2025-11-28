@@ -1,148 +1,117 @@
-import React, { useState } from 'react';
-import { Pressable, Text, View, Linking } from 'react-native';
-import { router } from 'expo-router';
-import { useAuthContext } from '../context/AuthContext';
+import { useCallback, useEffect, useRef } from 'react';
+import * as Notifications from 'expo-notifications';
+import * as Linking from 'expo-linking';
+import { useRootNavigationState, useRouter } from 'expo-router';
 import getNotificationMetadata from '../utils/getNotificationMetadata';
-import { DateTime } from 'luxon';
 
-const API_BASE = 'https://invid.au';
+const IN_APP_PREFIXES = [
+  '/forums',
+  '/messages',
+  '/lobby',
+  '/pugs',
+  '/tournaments',
+  '/matches',
+  '/user',
+  '/profile',
+  '/news',
+];
 
-export default function NotificationItem({ note }) {
-  const [isRead, setIsRead] = useState(note.is_read);
-  const { accessToken } = useAuthContext();
-  const { text, target } = getNotificationMetadata(note);
+const WEB_ONLY_PREFIXES = ['/competitions'];
 
-  // ───────────────────────────────
-  const markAsRead = async () => {
-    if (isRead || !note.id) return;
-    setIsRead(true); // Optimistic update
+const stripHost = (target = '') =>
+  target.replace(/^https?:\/\/invid\.au/i, '').replace(/^https?:\/\/www\.invid\.au/i, '');
 
-    try {
-      console.log(`📬 Marking notification ${note.id} as read...`);
-      const res = await fetch(`${API_BASE}/mobile/notifications/${note.id}/read`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${accessToken}`,
-        },
-      });
+const normalizeTarget = (target) => {
+  if (!target) return null;
+  let clean = stripHost(String(target).trim());
+  if (!clean) return null;
+  if (!clean.startsWith('/')) clean = `/${clean}`;
+  return clean;
+};
 
-      if (res.ok) {
-        console.log(`✅ Notification ${note.id} marked as read`);
-      } else {
-        console.warn(`⚠️ markAsRead failed: HTTP ${res.status}`);
-      }
-    } catch (err) {
-      console.warn(`❌ markAsRead error for ${note.id}:`, err.message);
-    }
-  };
+const deriveTargetFromPayload = (payload = {}) => {
+  const rawTarget =
+    payload.target ||
+    payload.url ||
+    payload.link ||
+    payload.path;
 
-  // ───────────────────────────────
-  const handlePress = async () => {
-    try {
-      await markAsRead();
-      await new Promise(res => setTimeout(res, 150)); // small delay for network dispatch
+  if (rawTarget) return rawTarget;
 
-      if (!target) return;
-      let cleanTarget = target.replace('https://invid.au', '');
+  const meta = getNotificationMetadata({
+    type: payload.type || payload.notification_type,
+    data: payload,
+  });
 
-      // ✅ Forum notifications open in-app
-      if (note.type?.startsWith('forum_')) {
-        cleanTarget = cleanTarget
-          .replace(/^\/forum\/thread\//, '/forums/topic/')
-          .replace(/#post-(\d+)/, '?highlight=$1');
+  return meta?.target || null;
+};
 
-        console.log('📲 Navigating in-app to', cleanTarget);
+export default function NotificationNavigationHandler() {
+  const router = useRouter();
+  const navState = useRootNavigationState();
+  const hasHandledInitial = useRef(false);
+
+  const openTarget = useCallback(
+    (rawTarget) => {
+      const cleanTarget = normalizeTarget(rawTarget);
+      if (!cleanTarget) return;
+
+      const isWebOnly = WEB_ONLY_PREFIXES.some((prefix) =>
+        cleanTarget.startsWith(prefix),
+      );
+
+      const shouldOpenInApp =
+        !isWebOnly &&
+        IN_APP_PREFIXES.some((prefix) => cleanTarget.startsWith(prefix));
+
+      if (shouldOpenInApp) {
+        console.log('[push-navigation] routing in-app to', cleanTarget);
         router.push(cleanTarget);
         return;
       }
-	  
-	  // 📩 Direct Messages — always navigate IN-APP
-if (
-  note.type === 'directmessage' ||
-  note.type === 'direct_message' ||
-  note.type === 'directMessage'
-) {
-  console.log('📲 Navigating to DM in-app:', cleanTarget);
-  router.push(cleanTarget);
-  return;
-}
 
-      // 🌐 Others open web
-      console.log('🌐 Opening in browser:', `https://invid.au${cleanTarget}`);
-      Linking.openURL(`https://invid.au${cleanTarget}`);
-    } catch (error) {
-      console.warn('Error handling notification press:', error);
-    }
-  };
-
-  // ───────────────────────────────
-  const getRelativeTime = (timestamp) => {
-    try {
-      const dt = DateTime.fromISO(timestamp);
-      const now = DateTime.local();
-      if (!dt.isValid) return 'Unknown time';
-
-      const diff = now.diff(dt, ['days', 'hours', 'minutes']).toObject();
-      if (diff.days >= 7) return dt.toFormat('dd/MM/yy – h:mm a');
-      if (diff.days >= 2) return dt.toFormat('cccc');
-      if (diff.days >= 1) return 'Yesterday';
-      if (diff.hours >= 1) return `${Math.floor(diff.hours)}h ago`;
-      if (diff.minutes >= 1) return `${Math.floor(diff.minutes)}m ago`;
-      return 'Just now';
-    } catch {
-      return 'Unknown time';
-    }
-  };
-
-  // ───────────────────────────────
-  return (
-    <Pressable onPress={handlePress}>
-      <View
-        style={{
-          padding: 16,
-          backgroundColor: isRead ? '#1a1a1a' : '#2a1a2a',
-          borderRadius: 8,
-          marginBottom: 8,
-          marginHorizontal: 12,
-          borderLeftWidth: 4,
-          borderLeftColor: isRead ? '#333' : '#ff4655',
-        }}
-      >
-        <Text
-          style={{
-            color: '#fff',
-            fontWeight: isRead ? 'normal' : '600',
-            fontSize: 14,
-            lineHeight: 20,
-          }}
-        >
-          {text || note.message || 'No message'}
-        </Text>
-        <Text
-          style={{
-            fontSize: 12,
-            color: '#888',
-            marginTop: 6,
-            fontWeight: '500',
-          }}
-        >
-          {getRelativeTime(note.created_at)}
-        </Text>
-        {note.type && (
-          <Text
-            style={{
-              fontSize: 11,
-              color: '#666',
-              marginTop: 4,
-              textTransform: 'uppercase',
-              letterSpacing: 0.5,
-            }}
-          >
-            {note.type}
-          </Text>
-        )}
-      </View>
-    </Pressable>
+      const fullUrl = `https://invid.au${cleanTarget}`;
+      console.log('[push-navigation] opening in browser', fullUrl);
+      Linking.openURL(fullUrl);
+    },
+    [router],
   );
+
+  const handleResponse = useCallback(
+    (response) => {
+      const payload = response?.notification?.request?.content?.data || {};
+      const target = deriveTargetFromPayload(payload);
+      openTarget(target);
+    },
+    [openTarget],
+  );
+
+  useEffect(() => {
+    if (!navState?.key) return;
+
+    let isMounted = true;
+
+    (async () => {
+      try {
+        const lastResponse = await Notifications.getLastNotificationResponseAsync();
+        if (isMounted && lastResponse && !hasHandledInitial.current) {
+          hasHandledInitial.current = true;
+          handleResponse(lastResponse);
+        }
+      } catch (err) {
+        console.warn('[push-navigation] failed to read last notification', err);
+      }
+    })();
+
+    const subscription = Notifications.addNotificationResponseReceivedListener(
+      handleResponse,
+    );
+
+    return () => {
+      isMounted = false;
+      subscription && Notifications.removeNotificationSubscription(subscription);
+    };
+  }, [handleResponse, navState?.key]);
+
+  return null;
 }

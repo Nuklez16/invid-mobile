@@ -31,6 +31,7 @@ import {
 import { useAuthContext } from "../../src/context/AuthContext";
 import { authedFetch } from "../../src/api/client";
 import SecureAvatar from "../../src/components/SecureAvatar";
+import { API_BASE } from "../../src/config/api";
 
 import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
@@ -122,9 +123,94 @@ export default function ConversationScreen() {
   // --- Helpers ----------------------------------------------------------
   const buildMediaTypeFromUrl = (url) => {
     const ext = (url?.split(".").pop() || "").toLowerCase();
-    if (["mp4", "webm", "mov", "avi"].includes(ext)) return "video";
-    return "image";
+
+    if (["mp4", "webm", "mov", "avi", "mkv"].includes(ext)) return "video";
+    if (["gif", "jpg", "jpeg", "png", "webp", "heic", "heif"].includes(ext))
+      return "image";
+
+    return "file";
   };
+
+  const buildMediaTypeFromMime = (mimeType, fallbackHint = "image") => {
+    if (!mimeType) return fallbackHint;
+
+    if (mimeType.startsWith("video/")) return "video";
+    if (mimeType.startsWith("image/")) return "image";
+
+    return "file";
+  };
+
+  const normalizeUrl = (url) => {
+    if (!url) return null;
+    if (url.startsWith("http")) return url;
+    if (url.startsWith("//")) return `https:${url}`;
+    if (url.startsWith("data:")) return url;
+
+    const sanitized = url.startsWith("/") ? url : `/${url}`;
+    return `${API_BASE}${sanitized}`;
+  };
+
+  const extractMediaUrl = (item) =>
+    item?.url || item?.uri || item?.path || item?.location || item?.mediaUrl;
+
+  const normalizeMedia = useCallback((media = [], mediaUrls = []) => {
+    if (Array.isArray(media) && media.length > 0) {
+      return media
+        .map((item) => {
+          if (!item) return null;
+
+          const rawUrl =
+            typeof item === "string" ? item : extractMediaUrl(item);
+          const normalizedUrl = normalizeUrl(rawUrl);
+
+          if (!normalizedUrl) return null;
+
+          const derivedType =
+            item.type ||
+            buildMediaTypeFromMime(item.mimeType, buildMediaTypeFromUrl(rawUrl));
+
+          return {
+            ...item,
+            url: normalizedUrl,
+            type: derivedType,
+          };
+        })
+        .filter(Boolean);
+    }
+
+    if (Array.isArray(mediaUrls) && mediaUrls.length > 0) {
+      return mediaUrls
+        .map((item) => {
+          const rawUrl = typeof item === "string" ? item : extractMediaUrl(item);
+          const normalizedUrl = normalizeUrl(rawUrl);
+
+          if (!normalizedUrl) return null;
+
+          return {
+            url: normalizedUrl,
+            type: buildMediaTypeFromUrl(rawUrl),
+          };
+        })
+        .filter(Boolean);
+    }
+
+    return [];
+  }, []);
+
+  const normalizeMessage = useCallback(
+    (message) => {
+      if (!message) return message;
+
+      const media = normalizeMedia(message.media, message.mediaUrls);
+
+      return {
+        ...message,
+        media,
+        mediaUrls: media.map((m) => m.url),
+      };
+    },
+    [normalizeMedia]
+  );
 
   const openVideo = (url) => {
     if (!url) return;
@@ -150,10 +236,11 @@ export default function ConversationScreen() {
           `/messages/conversations/${conversationId}?page=${pageToLoad}&pageSize=${PAGE_SIZE}`
         );
         const data = await res.json();
+        const normalizedMessages = (data.messages || []).map(normalizeMessage);
 
         if (!append) {
           setConversation(data);
-          setMessages(data.messages || []);
+          setMessages(normalizedMessages);
           navigation.setOptions({
             title: data.conversationName || "Conversation",
             headerStyle: {
@@ -165,7 +252,7 @@ export default function ConversationScreen() {
             },
           });
         } else {
-          const newMessages = data.messages || [];
+          const newMessages = normalizedMessages;
           if (newMessages.length > 0) {
             setMessages((prev) => [...newMessages, ...prev]);
           }
@@ -181,7 +268,7 @@ export default function ConversationScreen() {
         setLoadingMore(false);
       }
     },
-    [conversationId, navigation]
+    [conversationId, navigation, normalizeMessage]
   );
 
   useEffect(() => {
@@ -201,24 +288,34 @@ export default function ConversationScreen() {
     originalAsset = null
   ) => {
     try {
-      const filename = uri.split("/").pop() || "upload";
+      const filename =
+        originalAsset?.name ||
+        originalAsset?.fileName ||
+        uri.split("/").pop() ||
+        "upload";
       const ext = (filename.split(".").pop() || "").toLowerCase();
 
       // Determine MIME type
-      let mimeType;
-      if (originalAsset?.mimeType) {
-        mimeType = originalAsset.mimeType;
-      } else {
-        if (typeHint === "video") {
-          mimeType = ext === "webm" ? "video/webm" : "video/mp4";
+      let mimeType = originalAsset?.mimeType;
+
+      if (!mimeType) {
+        if (["mp4", "webm", "mov", "avi", "mkv"].includes(ext)) {
+          mimeType =
+            ext === "mov"
+              ? "video/quicktime"
+              : ext === "avi"
+                ? "video/x-msvideo"
+                : `video/${ext}`;
+        } else if (["gif", "jpg", "jpeg", "png", "webp", "heic", "heif"].includes(ext)) {
+          mimeType = `image/${ext === "jpg" ? "jpeg" : ext}`;
+        } else if (ext) {
+          mimeType = `application/${ext}`;
+        } else if (typeHint === "video") {
+          mimeType = "video/mp4";
+        } else if (typeHint === "file") {
+          mimeType = "application/octet-stream";
         } else {
-          mimeType = `image/${
-            ["jpg", "jpeg", "png", "webp", "gif"].includes(ext)
-              ? ext === "jpg"
-                ? "jpeg"
-                : ext
-              : "jpeg"
-          }`;
+          mimeType = "image/jpeg";
         }
       }
 
@@ -262,15 +359,18 @@ export default function ConversationScreen() {
     try {
       console.log("Adding attachment from URI:", uri);
       const url = await uploadToServer(uri, typeHint, originalAsset);
-      const type = buildMediaTypeFromUrl(url);
+      const normalizedUrl = normalizeUrl(url);
+      const type =
+        buildMediaTypeFromMime(originalAsset?.mimeType, typeHint) ||
+        buildMediaTypeFromUrl(url);
 
-      console.log("Attachment added successfully:", { url, type });
+      console.log("Attachment added successfully:", { url, normalizedUrl, type });
 
       setAttachments((prev) => [
         ...prev,
         {
           id: `local-${Date.now()}-${Math.random()}`,
-          url,
+          url: normalizedUrl || url,
           type,
         },
       ]);
@@ -305,7 +405,7 @@ export default function ConversationScreen() {
               }
 
               const result = await ImagePicker.launchCameraAsync({
-                mediaTypes: ImagePicker.MediaType.Images,
+                mediaTypes: ImagePicker.MediaTypeOptions.Images,
                 quality: 0.8,
                 allowsEditing: false,
                 aspect: [4, 3],
@@ -330,7 +430,7 @@ export default function ConversationScreen() {
               }
 
               const result = await ImagePicker.launchImageLibraryAsync({
-                mediaTypes: ImagePicker.MediaType.Images,
+                mediaTypes: ImagePicker.MediaTypeOptions.Images,
                 quality: 0.8,
                 selectionLimit: 4,
                 allowsMultipleSelection: true,
@@ -355,7 +455,7 @@ export default function ConversationScreen() {
               }
 
               const result = await ImagePicker.launchImageLibraryAsync({
-                mediaTypes: ImagePicker.MediaType.Videos,
+                mediaTypes: ImagePicker.MediaTypeOptions.Videos,
                 quality: 0.8,
                 allowsEditing: false,
                 selectionLimit: 1,
@@ -407,7 +507,7 @@ export default function ConversationScreen() {
                 }
 
                 const result = await ImagePicker.launchCameraAsync({
-                  mediaTypes: ImagePicker.MediaType.Images,
+                  mediaTypes: ImagePicker.MediaTypeOptions.Images,
                   quality: 0.8,
                   allowsEditing: false,
                   aspect: [4, 3],
@@ -443,7 +543,7 @@ export default function ConversationScreen() {
                 }
 
                 const result = await ImagePicker.launchImageLibraryAsync({
-                  mediaTypes: ImagePicker.MediaType.Images,
+                  mediaTypes: ImagePicker.MediaTypeOptions.Images,
                   quality: 0.8,
                   selectionLimit: 4,
                   allowsMultipleSelection: true,
@@ -485,7 +585,7 @@ export default function ConversationScreen() {
                 }
 
                 const result = await ImagePicker.launchImageLibraryAsync({
-                  mediaTypes: ImagePicker.MediaType.Videos,
+                  mediaTypes: ImagePicker.MediaTypeOptions.Videos,
                   quality: 0.8,
                   selectionLimit: 1,
                   allowsMultipleSelection: false,
@@ -552,12 +652,13 @@ export default function ConversationScreen() {
     setSending(true);
 
     const mediaUrls = attachments.map((a) => a.url);
+    const optimisticMedia = normalizeMedia(attachments, mediaUrls);
 
     const optimistic = {
       id: `local-${Date.now()}`,
       message: trimmed,
-      media: attachments,
-      mediaUrls,
+      media: optimisticMedia,
+      mediaUrls: optimisticMedia.map((m) => m.url),
       senderId: user.id,
       senderUsername: user.username,
       senderAvatar: user.avatar,
@@ -591,19 +692,12 @@ export default function ConversationScreen() {
         return;
       }
 
+      const normalized = normalizeMessage(data);
+
       setMessages((prev) =>
         prev
           .filter((m) => m.id !== optimistic.id)
-          .concat({
-            id: data.id,
-            message: data.message,
-            media: data.media || [],
-            mediaUrls: data.mediaUrls || [],
-            senderId: data.senderId,
-            senderUsername: data.senderUsername,
-            senderAvatar: data.senderAvatar,
-            createdAt: data.createdAt,
-          })
+          .concat(normalized)
       );
       scrollToBottom(true);
     } catch (err) {
@@ -626,6 +720,13 @@ export default function ConversationScreen() {
     return (
       <View style={styles.mediaGrid}>
         {item.media.map((m, idx) => {
+          const mediaUri =
+            m.url || m.uri || m.path || m.location || m.mediaUrl;
+          const normalizedUri = normalizeUrl(mediaUri);
+          const sourceUri = normalizedUri || mediaUri;
+
+          if (!sourceUri) return null;
+
           const isSingle = total === 1;
 
           if (m.type === "video") {
@@ -636,11 +737,11 @@ export default function ConversationScreen() {
                   styles.mediaItem,
                   isSingle && styles.mediaItemSingle,
                 ]}
-                onPress={() => openVideo(m.url)}
+                onPress={() => openVideo(sourceUri)}
                 activeOpacity={0.7}
               >
                 <Image
-                  source={{ uri: m.url }}
+                  source={{ uri: sourceUri }}
                   style={[styles.mediaItem, isSingle && styles.mediaItemSingle]}
                   resizeMode="cover"
                 />
@@ -651,16 +752,31 @@ export default function ConversationScreen() {
             );
           }
 
+          if (m.type === "image") {
+            return (
+              <Image
+                key={idx}
+                source={{ uri: sourceUri }}
+                style={[
+                  styles.mediaItem,
+                  isSingle && styles.mediaItemSingle,
+                ]}
+                resizeMode="cover"
+              />
+            );
+          }
+
           return (
-            <Image
+            <View
               key={idx}
-              source={{ uri: m.url }}
               style={[
                 styles.mediaItem,
                 isSingle && styles.mediaItemSingle,
+                styles.filePlaceholder,
               ]}
-              resizeMode="cover"
-            />
+            >
+              <Text style={styles.filePlaceholderText}>📎 File</Text>
+            </View>
           );
         })}
       </View>
@@ -756,21 +872,35 @@ export default function ConversationScreen() {
               horizontal
               data={attachments}
               keyExtractor={(item) => item.id}
-              renderItem={({ item }) => (
-                <View style={styles.attachmentThumbWrapper}>
-                  <Image
-                    source={{ uri: item.url }}
-                    style={styles.attachmentThumb}
-                    resizeMode="cover"
-                  />
-                  <TouchableOpacity
-                    style={styles.attachmentRemove}
-                    onPress={() => removeAttachment(item.id)}
-                  >
-                    <Text style={styles.attachmentRemoveText}>✕</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
+              renderItem={({ item }) => {
+                const isImage = item.type === "image";
+                const isVideo = item.type === "video";
+                const thumbUri = normalizeUrl(item.url) || item.url;
+
+                return (
+                  <View style={styles.attachmentThumbWrapper}>
+                    {isImage ? (
+                      <Image
+                        source={{ uri: thumbUri }}
+                        style={styles.attachmentThumb}
+                        resizeMode="cover"
+                      />
+                    ) : (
+                      <View style={[styles.attachmentThumb, styles.filePlaceholder]}>
+                        <Text style={styles.filePlaceholderText}>
+                          {isVideo ? "🎥" : "📎"}
+                        </Text>
+                      </View>
+                    )}
+                    <TouchableOpacity
+                      style={styles.attachmentRemove}
+                      onPress={() => removeAttachment(item.id)}
+                    >
+                      <Text style={styles.attachmentRemoveText}>✕</Text>
+                    </TouchableOpacity>
+                  </View>
+                );
+              }}
               showsHorizontalScrollIndicator={false}
             />
           </View>

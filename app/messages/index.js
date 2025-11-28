@@ -12,20 +12,21 @@ import { useAuthContext } from "../../src/context/AuthContext";
 import { authedFetch } from "../../src/api/client";
 import SecureAvatar from "../../src/components/SecureAvatar";
 import styles from "../../src/styles/messageListStyles";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 // Time formatting helper
 const formatMessageTime = (timestamp) => {
-  if (!timestamp) return '';
+  if (!timestamp) return "";
   const date = new Date(timestamp);
   const now = new Date();
   const diffInHours = (now - date) / (1000 * 60 * 60);
-  
+
   if (diffInHours < 24) {
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   } else if (diffInHours < 168) {
-    return date.toLocaleDateString([], { weekday: 'short' });
+    return date.toLocaleDateString([], { weekday: "short" });
   } else {
-    return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+    return date.toLocaleDateString([], { month: "short", day: "numeric" });
   }
 };
 
@@ -59,7 +60,7 @@ export default function MessagesInboxScreen() {
   }, []);
 
   useEffect(() => {
-    navigation.setOptions({ 
+    navigation.setOptions({
       title: "Messages",
       headerStyle: {
         backgroundColor: '#0d0d0d',
@@ -70,7 +71,7 @@ export default function MessagesInboxScreen() {
       },
     });
     loadConversations();
-  }, [loadConversations]);
+  }, [loadConversations, navigation]);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -105,13 +106,19 @@ export default function MessagesInboxScreen() {
     const participantCount = item.participants?.length || 0;
     const isGroup = participantCount > 2;
     const other = item.participants?.find((p) => Number(p.id) !== Number(user?.id)) || null;
-    
-    const displayName = item.conversationName || 
-      (isGroup ? item.participants.map((p) => p.username).join(", ") : other?.username || "Conversation");
+
+    const displayName =
+      item.conversationName ||
+      (isGroup
+        ? item.participants.map((p) => p.username).join(", ")
+        : other?.username || "Conversation");
 
     // Determine if last message was from current user
-    const lastMessageFromMe = item.lastSenderId && Number(item.lastSenderId) === Number(user.id);
-    const hasMedia = Array.isArray(item.lastMedia) && item.lastMedia.length > 0;
+    const lastMessageFromMe =
+      item.lastSenderId && Number(item.lastSenderId) === Number(user.id);
+    const hasMedia =
+      (Array.isArray(item.lastMedia) && item.lastMedia.length > 0) ||
+      (Array.isArray(item.lastMediaUrls) && item.lastMediaUrls.length > 0);
     
     // Build preview text with clear sender indication
     let previewText = "";
@@ -193,18 +200,20 @@ export default function MessagesInboxScreen() {
 
   if (loading && !refreshing) {
     return (
-      <View style={styles.center}>
+      <SafeAreaView style={styles.center}>
         <ActivityIndicator size="large" color="#ff4655" />
-      </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       {conversations.length === 0 ? (
         <View style={styles.center}>
           <Text style={styles.emptyText}>No conversations yet.</Text>
-          <Text style={styles.emptySubtext}>Start a conversation to see it here.</Text>
+          <Text style={styles.emptySubtext}>
+            Start a conversation to see it here.
+          </Text>
         </View>
       ) : (
         <FlatList
@@ -212,15 +221,16 @@ export default function MessagesInboxScreen() {
           keyExtractor={(item) => String(item.conversationId)}
           renderItem={renderItem}
           refreshControl={
-            <RefreshControl 
-              refreshing={refreshing} 
+            <RefreshControl
+              refreshing={refreshing}
               onRefresh={onRefresh}
               tintColor="#ff4655"
               colors={["#ff4655"]}
             />
           }
+          contentContainerStyle={styles.listContent}
         />
       )}
-    </View>
+    </SafeAreaView>
   );
 }
