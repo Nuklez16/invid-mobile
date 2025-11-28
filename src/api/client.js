@@ -7,7 +7,6 @@ import { performTokenRefresh } from './refreshToken';
 export async function authedFetch(path, opts = {}) {
   const { method = 'GET', body, headers = {} } = opts;
 
-  // Load tokens from secure storage
   const { accessToken, refreshToken } = await getTokens();
 
   if (!accessToken || !refreshToken) {
@@ -20,21 +19,27 @@ export async function authedFetch(path, opts = {}) {
   const endpoint = buildUrl(path);
 
   const doRequest = async (token) => {
+    const finalHeaders = {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...headers,
+    };
+
+    // ❗ Only set content-type when NOT uploading FormData
+    if (!(body instanceof FormData)) {
+      finalHeaders['Content-Type'] = 'application/json';
+    }
+
     return fetch(endpoint, {
       method,
-      headers: {
-        'Content-Type': 'application/json',
-        ...headers,
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-      body: body, // caller must JSON.stringify
+      headers: finalHeaders,
+      body,
     });
   };
 
-  // First request attempt
+  // First attempt
   let res = await doRequest(accessToken);
 
-  // If token expired → refresh
+  // Token refresh flow
   if (res.status === 401 && refreshToken) {
     try {
       console.log('🔄 Token expired, refreshing...');
@@ -42,13 +47,11 @@ export async function authedFetch(path, opts = {}) {
       const data = await performTokenRefresh(refreshToken);
 
       if (data?.accessToken) {
-        // Persist new tokens
         await saveTokens({
           accessToken: data.accessToken,
           refreshToken: data.refreshToken || refreshToken,
         });
 
-        // Retry original request
         res = await doRequest(data.accessToken);
         console.log('✅ Retried with fresh token');
       }
@@ -56,7 +59,6 @@ export async function authedFetch(path, opts = {}) {
       console.warn('❌ Refresh failed:', error.message);
       await clearSession();
       router.replace('/login');
-
       return new Response(JSON.stringify({ error: 'authentication failed' }), { status: 401 });
     }
   }
